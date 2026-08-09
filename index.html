@@ -3,220 +3,627 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>CARDWORKS Engine — reference implementation</title>
+<meta name="description" content="CARDWORKS — visiting cards composed from validated components under print constraints. Bangla and English, built for Bangladesh.">
+<title>CARDWORKS</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Hind+Siliguri:wght@400;500;600;700&family=Noto+Sans+Bengali:wght@400;500;600;700&family=Tiro+Bangla&family=Baloo+Da+2:wght@400;600;800&family=Space+Grotesk:wght@400;500;600;700&family=Playfair+Display:wght@400;600;700&family=IBM+Plex+Mono:wght@400;500;600&family=Archivo:wght@400;600;800&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Archivo:wght@400;500;600;700;800&family=Hind+Siliguri:wght@400;500;600;700&family=Noto+Sans+Bengali:wght@400;500;600;700&family=Tiro+Bangla&family=Baloo+Da+2:wght@400;600;800&family=Libre+Franklin:wght@400;500;600;700&family=Playfair+Display:wght@400;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
 <style>
+/* ══════════════════════════════════════════════════════════════════════════
+   MODERNIST — inherited from the CARDWORKS prototype design system.
+   Tokens are the prototype's own: same ground, same ink, same accent, same
+   zero radius. Nothing here invents a new identity; it extends the one the
+   product already had into surfaces the prototype never built.
+   ══════════════════════════════════════════════════════════════════════ */
 :root{
-  --bg:#f3f2f2; --surface:#fff; --text:#201e1d; --muted:#6f6b68;
-  --divider:#d8d5d2; --accent:#ec3013; --accent-100:#fdeae6; --ok:#1f7a4d; --warn:#b26a00;
-  --mono:'IBM Plex Mono',ui-monospace,monospace;
-  --ui:'Space Grotesk',-apple-system,BlinkMacSystemFont,sans-serif;
+  --color-bg:#f3f2f2;
+  --color-surface:#eae9e9;
+  --color-text:#201e1d;
+  --color-accent:#ec3013;
+  --color-accent-2:#e15b47;
+
+  /* Structure. The prototype draws with two weights of line: a 2px rule that
+     carries the frame, and a hairline that carries the grid. */
+  --rule:2px solid var(--color-text);
+  --divider:color-mix(in srgb, var(--color-text) 40%, transparent);
+  --hair:color-mix(in srgb, var(--color-text) 18%, transparent);
+
+  --color-neutral-100:#f8f4f4; --color-neutral-200:#eae7e7; --color-neutral-300:#d7d3d3;
+  --color-neutral-400:#bab6b6; --color-neutral-500:#9b9797; --color-neutral-600:#7d7979;
+  --color-neutral-700:#605d5d; --color-neutral-800:#444141; --color-neutral-900:#2d2b2b;
+  --color-accent-100:#fff2ef; --color-accent-200:#ffe0d9; --color-accent-600:#dd2b0f;
+  --color-accent-700:#ae1800; --color-accent-800:#7c1405;
+
+  /* 62% is the floor at which ink over this ground still clears 4.5:1.
+     The prototype used 45–55% for meta text, which does not. */
+  --muted:color-mix(in srgb, var(--color-text) 62%, transparent);
+  --faint:color-mix(in srgb, var(--color-text) 46%, transparent);
+
+  --ok:#1f6b45;
+  --warn:#8a5300;
+
+  --font-heading:"Archivo", system-ui, sans-serif;
+  --font-body:"Archivo", system-ui, sans-serif;
+  --font-bn:"Hind Siliguri","Noto Sans Bengali", system-ui, sans-serif;
+  --font-mono:"IBM Plex Mono", ui-monospace, monospace;
+
+  --space-1:4px; --space-2:8px; --space-3:12px; --space-4:16px;
+  --space-6:24px; --space-8:32px; --space-12:48px;
+
+  --radius:0px;
+  --shadow-sm:0 1px 2px color-mix(in srgb,#2d2b2b 14%,transparent);
+  --shadow-md:0 3px 10px color-mix(in srgb,#2d2b2b 16%,transparent);
+  --shadow-lg:0 12px 32px color-mix(in srgb,#2d2b2b 22%,transparent);
+
+  --frame:1440px;
+  --nav-h:62px;
 }
-*{margin:0;padding:0;box-sizing:border-box}
-body{background:var(--bg);color:var(--text);font-family:var(--ui);font-size:13px;line-height:1.45}
-.hd{border-bottom:2px solid var(--text);padding:14px 20px;display:flex;gap:16px;align-items:baseline;flex-wrap:wrap;background:var(--surface)}
-.hd h1{font-size:15px;font-weight:800;letter-spacing:.14em;text-transform:uppercase}
-.hd .sub{font-size:11px;color:var(--muted);letter-spacing:.06em}
-.hd .tag{margin-left:auto;font-family:var(--mono);font-size:10px;letter-spacing:.1em;text-transform:uppercase;border:1px solid var(--divider);padding:3px 8px}
-.wrap{display:grid;grid-template-columns:300px minmax(0,1fr) 340px;gap:0;min-height:calc(100vh - 52px)}
-/* Grid items default to min-width:auto, which lets a column size to its
-   CONTENT rather than its track — the page then scrolls sideways on a phone.
-   minmax(0,1fr) on the track plus min-width:0 on the item is the fix. In this
-   market (blueprint F7) a horizontal scrollbar is not a cosmetic defect. */
-@media (max-width:1180px){
-  .wrap{grid-template-columns:minmax(0,1fr)}
-  .col{border-right:0;border-bottom:1px solid var(--divider)}
-  .gal{grid-template-columns:1fr}
-}
-.col{padding:18px 20px;border-right:1px solid var(--divider);overflow:auto;min-width:0}
-.col:last-child{border-right:0}
+
+*,*::before,*::after{box-sizing:border-box}
+*{margin:0;padding:0}
 html,body{max-width:100%;overflow-x:hidden}
-.chips{min-width:0}
-.kv span,.chk span{overflow-wrap:anywhere}
-h2{font-size:10px;font-weight:800;letter-spacing:.16em;text-transform:uppercase;color:var(--muted);margin:22px 0 10px}
-h2:first-child{margin-top:0}
-label{display:block;font-size:10px;letter-spacing:.1em;text-transform:uppercase;color:var(--muted);margin-bottom:3px}
-input,select,textarea{width:100%;font:inherit;font-size:12px;padding:6px 8px;border:1px solid var(--divider);background:var(--surface);color:var(--text);border-radius:0}
-input:focus,select:focus,textarea:focus{outline:2px solid var(--accent);outline-offset:-2px}
-.f{margin-bottom:9px}
-.lbl{display:block;font-size:10px;letter-spacing:.1em;text-transform:uppercase;color:var(--muted);margin-bottom:3px}
-.row2{display:grid;grid-template-columns:1fr 1fr;gap:9px}
-.chips{display:flex;flex-wrap:wrap;gap:5px}
-.chip{font:inherit;font-size:11px;padding:5px 9px;border:1px solid var(--divider);background:transparent;cursor:pointer;text-align:left}
-.chip:hover{background:#0001}
-:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
-.tile:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+body{
+  background:var(--color-bg); color:var(--color-text);
+  font-family:var(--font-body); font-size:15px; line-height:1.55; font-weight:400;
+  -webkit-font-smoothing:antialiased;
+}
+
+/* ── Browser surfaces. The parts we did not draw still carry the design. ── */
+::selection{background:var(--color-accent);color:var(--color-bg)}
+html{scrollbar-width:thin;scrollbar-color:color-mix(in srgb,var(--color-text) 30%,transparent) transparent}
+::-webkit-scrollbar{width:11px;height:11px}
+::-webkit-scrollbar-thumb{background:color-mix(in srgb,var(--color-text) 26%,transparent)}
+::-webkit-scrollbar-thumb:hover{background:color-mix(in srgb,var(--color-text) 42%,transparent)}
+::-webkit-scrollbar-track{background:transparent}
+:focus-visible{outline:2px solid var(--color-accent);outline-offset:2px}
+input,select,textarea{caret-color:var(--color-accent)}
+a{color:var(--color-accent);text-underline-offset:3px;text-decoration-thickness:1px}
+.num,.mono,.kv dd,.tnum{font-variant-numeric:tabular-nums}
+:lang(bn),.bn{font-family:var(--font-bn)}
+
+/* ── Type ─────────────────────────────────────────────────────────────── */
+h1,h2,h3,h4,h5,h6{font-family:var(--font-heading);font-weight:800;line-height:1.12;
+  letter-spacing:-0.015em;text-wrap:balance}
+h1{font-size:clamp(28px,3.4vw,42px)}
+h2{font-size:clamp(22px,2.4vw,32px)}
+h3{font-size:25px}
+h4{font-size:20px}
+h5{font-size:16px}
+h6{font-size:12px;letter-spacing:.09em;text-transform:uppercase;line-height:1.3}
+p{max-width:68ch}
+.lede{color:var(--muted);font-size:15px;max-width:62ch;margin-top:var(--space-3)}
+.micro{font-size:10.5px;letter-spacing:.14em;text-transform:uppercase;color:var(--muted);
+  font-weight:600;display:block}
+.mono{font-family:var(--font-mono);font-size:11px;letter-spacing:.01em}
+.hr{border:0;border-top:1px solid var(--divider);margin:var(--space-6) 0}
+.hair{border:0;border-top:1px solid var(--hair);margin:var(--space-4) 0}
+
+/* ── Frame + nav ──────────────────────────────────────────────────────── */
+.frame{max-width:var(--frame);margin:0 auto;min-height:100vh;background:var(--color-bg);
+  border-left:var(--rule);border-right:var(--rule)}
+@media(max-width:1460px){.frame{border-left:0;border-right:0}}
+.nav{display:flex;align-items:center;gap:var(--space-4);padding:0 var(--space-6);
+  height:var(--nav-h);border-bottom:var(--rule);background:var(--color-bg);
+  position:sticky;top:0;z-index:20;flex-wrap:wrap}
+.brand{font-family:var(--font-heading);font-weight:800;font-size:15px;letter-spacing:.2em;
+  text-transform:uppercase;white-space:nowrap}
+.crumb{font-size:10.5px;letter-spacing:.18em;text-transform:uppercase;color:var(--muted);
+  margin-right:auto;font-weight:600;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.navlinks{display:flex;gap:0;flex-wrap:wrap}
+
+/* ── Buttons ──────────────────────────────────────────────────────────── */
+.btn{font-family:var(--font-heading);font-weight:700;font-size:11.5px;letter-spacing:.08em;
+  text-transform:uppercase;padding:9px 15px;border:1px solid var(--divider);
+  background:transparent;color:var(--color-text);cursor:pointer;border-radius:var(--radius);
+  display:inline-flex;align-items:center;gap:7px;line-height:1;
+  transition:background .14s ease,color .14s ease,border-color .14s ease}
+.btn:hover{background:color-mix(in srgb,var(--color-text) 8%,transparent)}
+.btn:active{background:color-mix(in srgb,var(--color-text) 15%,transparent)}
+.btn:disabled{opacity:.42;cursor:not-allowed}
+.btn svg{display:block;flex:none}
+.btn-primary{background:var(--color-accent);color:var(--color-bg);border-color:var(--color-accent)}
+.btn-primary:hover{background:var(--color-accent-600);border-color:var(--color-accent-600)}
+.btn-primary:active{background:var(--color-accent-700);border-color:var(--color-accent-700)}
+.btn-ghost{border-color:transparent;color:var(--muted)}
+.btn-ghost:hover{background:transparent;color:var(--color-accent)}
+.btn-ghost[aria-current="true"]{color:var(--color-accent)}
+.btn-lg{font-size:12.5px;padding:13px 22px}
+
+/* ── Segmented control — the system's own selection language ──────────── */
+.seg{display:inline-flex;border:1px solid var(--divider);background:transparent}
+.seg > button{font-family:var(--font-heading);font-weight:700;font-size:11px;letter-spacing:.08em;
+  text-transform:uppercase;padding:8px 14px;background:transparent;border:0;cursor:pointer;
+  color:var(--color-text);line-height:1;transition:background .14s ease,color .14s ease}
+.seg > button + button{border-left:1px solid var(--divider)}
+.seg > button:hover{background:color-mix(in srgb,var(--color-text) 8%,transparent)}
+.seg > button[aria-pressed="true"]{background:var(--color-accent);color:var(--color-bg)}
+
+/* ── Chips ────────────────────────────────────────────────────────────── */
+.chips{display:flex;flex-wrap:wrap;gap:6px;min-width:0}
+.chip{font-family:var(--font-body);font-size:13px;padding:8px 13px;border:1px solid var(--divider);
+  background:transparent;color:var(--color-text);cursor:pointer;text-align:left;line-height:1.2;
+  border-radius:var(--radius);transition:background .14s ease,color .14s ease,border-color .14s ease}
+.chip:hover{background:color-mix(in srgb,var(--color-text) 8%,transparent)}
+.chip[aria-pressed="true"]{background:var(--color-accent);color:var(--color-bg);border-color:var(--color-accent)}
+.chip:disabled{opacity:.4;cursor:not-allowed}
+.chip-sm{font-size:12px;padding:6px 10px}
+
+/* ── Fields ───────────────────────────────────────────────────────────── */
+.field{display:flex;flex-direction:column;gap:5px;min-width:0}
+.field > label,.lbl{font-size:10px;letter-spacing:.13em;text-transform:uppercase;
+  color:var(--muted);font-weight:600}
+.input,select.input,textarea.input{width:100%;font-family:var(--font-body);font-size:14px;
+  padding:10px 12px;border:1px solid var(--divider);background:var(--color-bg);
+  color:var(--color-text);border-radius:var(--radius);line-height:1.4}
+.input:hover{border-color:color-mix(in srgb,var(--color-text) 55%,transparent)}
+.input:focus-visible{border-color:var(--color-accent);outline:2px solid var(--color-accent);outline-offset:-2px}
+.input::placeholder{color:var(--muted)}
+textarea.input{resize:vertical;font-family:var(--font-mono);font-size:12px;line-height:1.6}
+input[type=file].input{padding:8px;font-size:12px}
+.grid2{display:grid;grid-template-columns:1fr 1fr;gap:var(--space-4)}
+@media(max-width:640px){.grid2{grid-template-columns:1fr}}
+
+/* ── Rail ─────────────────────────────────────────────────────────────── */
+.rail{display:flex;flex-direction:column;border-right:var(--rule)}
+.railhd{padding:var(--space-4) var(--space-6);border-bottom:var(--rule)}
+.railitem{display:flex;gap:var(--space-3);align-items:center;padding:12px var(--space-6);
+  border:0;border-bottom:1px solid var(--hair);background:transparent;cursor:pointer;
+  text-align:left;font-family:var(--font-body);font-size:13.5px;width:100%;color:var(--color-text);
+  transition:background .14s ease,color .14s ease}
+.railitem:hover{background:color-mix(in srgb,var(--color-text) 7%,transparent)}
+.railitem[aria-current="step"]{background:var(--color-accent);color:var(--color-bg)}
+.railitem[aria-current="step"] .railnum{color:var(--color-bg)}
+.railitem:disabled{cursor:default;color:var(--faint)}
+.railnum{font-family:var(--font-mono);font-weight:600;font-size:10.5px;letter-spacing:.06em;
+  color:var(--muted);flex:none;font-variant-numeric:tabular-nums}
+.railmark{margin-left:auto;flex:none;display:flex;color:var(--color-accent)}
+.railitem[aria-current="step"] .railmark{color:var(--color-bg)}
+
+/* ── Tile grid — hairlines form one continuous grid, no floating cards ── */
+.tiles{display:grid;grid-template-columns:repeat(3,1fr);border-top:1px solid var(--hair)}
+@media(max-width:1100px){.tiles{grid-template-columns:repeat(2,1fr)}}
+@media(max-width:680px){.tiles{grid-template-columns:1fr}}
+.tile{display:flex;flex-direction:column;gap:var(--space-3);padding:var(--space-6);
+  border-right:1px solid var(--hair);border-bottom:1px solid var(--hair);
+  background:transparent;text-align:left;cursor:pointer;color:inherit;font:inherit;
+  transition:background .16s ease}
+.tiles > .tile:nth-child(3n){border-right:0}
+@media(max-width:1100px){.tiles > .tile:nth-child(3n){border-right:1px solid var(--hair)}
+  .tiles > .tile:nth-child(2n){border-right:0}}
+@media(max-width:680px){.tiles > .tile{border-right:0}}
+.tile:hover{background:color-mix(in srgb,var(--color-text) 4%,transparent)}
+.tile[aria-pressed="true"]{background:var(--color-accent-100)}
+.tile[aria-pressed="true"] .tiletitle{color:var(--color-accent-800)}
+.tile.dead{opacity:.6;cursor:default}
+.tiletitle{font-family:var(--font-heading);font-weight:800;font-size:12px;letter-spacing:.07em;
+  text-transform:uppercase}
+.tilemeta{font-size:11.5px;color:var(--muted)}
+.card{display:block;width:100%;height:auto;background:#fff;box-shadow:var(--shadow-sm)}
+.deadbox{aspect-ratio:89/51;display:flex;flex-direction:column;gap:6px;align-items:center;
+  justify-content:center;border:1px dashed var(--divider);padding:var(--space-4);text-align:center}
+
+/* ── Score bar ────────────────────────────────────────────────────────── */
+.score{display:flex;align-items:center;gap:10px}
+.bar{flex:1;height:5px;background:color-mix(in srgb,var(--color-text) 14%,transparent);display:block}
+.bar > span{display:block;height:5px;background:var(--color-accent)}
+.scorenum{font-family:var(--font-mono);font-size:11px;font-variant-numeric:tabular-nums;color:var(--muted)}
+
+/* ── Check rows ───────────────────────────────────────────────────────── */
+.check{display:flex;gap:11px;align-items:flex-start;padding:10px 0;border-bottom:1px solid var(--hair);
+  font-size:13.5px}
+.check:last-child{border-bottom:0}
+.check .ico{flex:none;margin-top:2px;display:flex}
+.check .note{display:block;color:var(--muted);font-size:12px;margin-top:2px}
+.i-pass{color:var(--ok)} .i-review{color:var(--warn)} .i-fail{color:var(--color-accent)}
+.tally{display:flex;gap:var(--space-4);flex-wrap:wrap;font-size:11px;letter-spacing:.1em;
+  text-transform:uppercase;color:var(--muted);font-weight:600}
+.tally b{color:var(--color-text);font-weight:700}
+
+/* ── Key/value ────────────────────────────────────────────────────────── */
+.kv{display:grid;grid-template-columns:auto 1fr;gap:5px var(--space-4);font-size:13px;margin:0}
+.kv dt{color:var(--muted);white-space:nowrap}
+.kv dd{margin:0;font-family:var(--font-mono);font-size:11.5px;font-variant-numeric:tabular-nums;
+  word-break:break-word}
+
+/* ── Layout scaffolds ─────────────────────────────────────────────────── */
+.cols{display:grid;grid-template-columns:290px minmax(0,1fr) 300px;min-height:calc(100vh - var(--nav-h))}
+.cols-2{display:grid;grid-template-columns:minmax(0,1fr) 380px;min-height:calc(100vh - var(--nav-h))}
+.pane{padding:var(--space-8) var(--space-6);min-width:0}
+.pane-r{border-left:var(--rule)}
+.pane-l{border-right:var(--rule)}
+.stack{display:flex;flex-direction:column;gap:var(--space-6)}
+.row{display:flex;gap:var(--space-3);align-items:center;flex-wrap:wrap}
+.spread{display:flex;gap:var(--space-4);align-items:center;justify-content:space-between;flex-wrap:wrap}
+.sectionhd{display:flex;align-items:baseline;justify-content:space-between;gap:var(--space-4);
+  padding:var(--space-4) var(--space-6);border-bottom:var(--rule);flex-wrap:wrap}
+.wide{padding:var(--space-6)}
+@media(max-width:1080px){
+  .cols,.cols-2{grid-template-columns:minmax(0,1fr)}
+  .pane-r,.pane-l{border-left:0;border-right:0;border-top:var(--rule)}
+  /* Seven stacked rail rows push the form a full screen down on a phone.
+     The rail becomes a horizontal stepper: same information, same order,
+     no scrolling before you can type. */
+  .rail{border-right:0;border-bottom:var(--rule);flex-direction:row;align-items:stretch}
+  .rail .railhd{display:none}
+  #rail{display:flex;overflow-x:auto;scrollbar-width:none;flex:1}
+  #rail::-webkit-scrollbar{display:none}
+  .railitem{width:auto;white-space:nowrap;border-bottom:0;
+    border-right:1px solid var(--hair);padding:12px 16px;scroll-snap-align:start}
+  .railitem .railmark{margin-left:7px}
+  .pane{padding:var(--space-6) var(--space-4)}
+}
+
+/* ── The one authored motion moment: composition resolving ────────────── */
+@keyframes cw-stage{from{opacity:0;transform:translateY(7px)}to{opacity:1;transform:none}}
+@keyframes cw-resolve{from{clip-path:inset(0 100% 0 0)}to{clip-path:inset(0 0 0 0)}}
+@keyframes cw-tick{0%{opacity:.25}50%{opacity:1}100%{opacity:.25}}
+.stage{animation:cw-stage .45s cubic-bezier(.16,1,.3,1) both}
+.resolve{animation:cw-resolve .8s cubic-bezier(.16,1,.3,1) both}
+.ticking{animation:cw-tick 1.1s ease-in-out infinite}
+@media(prefers-reduced-motion:reduce){
+  *,*::before,*::after{animation-duration:.001ms!important;animation-iteration-count:1!important;
+    transition-duration:.001ms!important}
+}
+
 .sr{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap}
-.chip[aria-pressed="true"]{background:var(--accent);color:#fff;border-color:var(--accent)}
-.gal{display:grid;grid-template-columns:repeat(auto-fill,minmax(268px,1fr));gap:16px}
-.tile{background:var(--surface);border:1px solid var(--divider);padding:12px;cursor:pointer}
-.tile[data-sel="1"]{border-color:var(--accent);box-shadow:0 0 0 2px var(--accent-100)}
-.tile.dead{opacity:.55}
-.tile h3{font-size:11px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;margin-bottom:2px}
-.tile .m{font-family:var(--mono);font-size:9.5px;color:var(--muted);letter-spacing:.04em}
-.card{display:block;width:100%;height:auto;background:#fff;box-shadow:0 1px 3px #0002;margin-bottom:9px}
-.big{max-width:420px}
-.badge{display:inline-block;font-family:var(--mono);font-size:9px;letter-spacing:.08em;text-transform:uppercase;padding:2px 5px;border:1px solid var(--divider);margin:2px 3px 0 0}
-.badge.b-ok{border-color:var(--ok);color:var(--ok)}
-.badge.b-warn{border-color:var(--warn);color:var(--warn)}
-.badge.b-fail{border-color:var(--accent);color:var(--accent)}
-.chk{display:flex;gap:8px;align-items:flex-start;padding:7px 0;border-bottom:1px solid var(--divider);font-size:12px}
-.dot{width:7px;height:7px;flex:none;margin-top:5px}
-.d-pass{background:var(--ok)}.d-review{background:var(--warn)}.d-fail{background:var(--accent)}
-.chk .note{color:var(--muted);font-size:11px;display:block;margin-top:1px}
-.trace{font-family:var(--mono);font-size:10.5px;line-height:1.6;color:var(--muted)}
-.trace b{color:var(--text);font-weight:600}
-pre{font-family:var(--mono);font-size:10px;background:#fff;border:1px solid var(--divider);padding:10px;overflow:auto;max-height:280px;white-space:pre-wrap;word-break:break-word}
-.tabs{display:flex;gap:0;margin-bottom:10px}
-.tab{font:inherit;font-size:11px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;padding:6px 11px;border:1px solid var(--divider);background:transparent;cursor:pointer}
-.tab[aria-pressed="true"]{background:var(--text);color:var(--bg);border-color:var(--text)}
-.note{font-size:11px;color:var(--muted);margin-top:6px}
-.kv{display:grid;grid-template-columns:auto 1fr;gap:2px 12px;font-size:11.5px}
-.kv b{font-weight:600}
-.kv span{color:var(--muted);font-family:var(--mono);font-size:10.5px}
+.empty{padding:var(--space-8) var(--space-6);color:var(--muted);font-size:14px;max-width:56ch}
+.pill{display:inline-flex;align-items:center;gap:6px;font-size:10.5px;letter-spacing:.11em;
+  text-transform:uppercase;font-weight:700;padding:4px 9px;border:1px solid currentColor}
+.pill-accent{color:var(--color-accent-800);background:var(--color-accent-100);border-color:var(--color-accent-200)}
+.pill-warn{color:var(--warn)}
+.pill-ok{color:var(--ok)}
+.pre{font-family:var(--font-mono);font-size:10.5px;line-height:1.65;background:var(--color-bg);
+  border:1px solid var(--hair);padding:var(--space-3);overflow:auto;max-height:300px;
+  white-space:pre-wrap;word-break:break-word;color:var(--muted)}
 </style>
 </head>
 <body>
+<div class="frame">
 
-<div class="hd">
-  <h1>Cardworks Engine</h1>
-  <span class="sub">Reference implementation — brief → ranked concepts → composed geometry → preflight → print output. Bangladesh market.</span>
-  <span style="display:flex;gap:0;margin-left:auto">
-    <button class="tab" id="m_gen" data-mode="generate" aria-pressed="true">Generate</button>
-    <button class="tab" id="m_lib" data-mode="library" aria-pressed="false">All layouts</button>
-    <button class="tab" id="m_bulk" data-mode="bulk" aria-pressed="false">Bulk</button>
-  </span>
-  <span class="tag" id="perf">—</span>
-</div>
+<nav class="nav">
+  <span class="brand">Cardworks</span>
+  <span class="crumb" id="crumb">Brief</span>
+  <div class="navlinks" id="navlinks"></div>
+</nav>
 
-<div class="wrap">
+<main id="main">
 
-  <!-- ─────────── INPUT ─────────── -->
-  <div class="col">
-    <h2>Preset briefs</h2>
-    <div class="chips" id="presets"></div>
-    <p class="note">Each preset is a real Bangladeshi card type. They exist to break the composer — long degree strings, three phone numbers, bilingual faces.</p>
+<!-- ══════════════════ BRIEF ══════════════════ -->
+<section data-screen="brief">
+ <div class="cols">
 
-    <h2>The brief</h2>
-    <div class="f"><label for="i_industry">Industry</label><select id="i_industry"></select></div>
-    <div class="f"><span class="lbl" id="lbl_pers">Personality — pick up to 3</span><div class="chips" role="group" aria-labelledby="lbl_pers" id="i_personality"></div></div>
-    <div class="f"><span class="lbl" id="lbl_fin">Finishes</span><div class="chips" role="group" aria-labelledby="lbl_fin" id="i_finishes"></div></div>
-    <div class="row2">
-      <div class="f"><label for="i_qty">Quantity</label><select id="i_qty">
-        <option>100</option><option>250</option><option selected>500</option><option>1000</option></select></div>
-      <div class="f"><label for="i_zone">Delivery</label><select id="i_zone">
-        <option value="dhaka">Inside Dhaka</option><option value="outside">Outside Dhaka</option></select></div>
+  <div class="rail">
+    <div class="railhd">
+      <h6>The brief</h6>
+      <p class="lede" style="font-size:12.5px;margin-top:6px">Seven short steps. Nothing about typography, bleed or CMYK. That is the system's job.</p>
     </div>
-
-    <h2>Logo</h2>
-    <div class="f"><label for="i_logo">Upload SVG, PNG or JPG</label>
-      <input type="file" id="i_logo" accept=".svg,image/svg+xml,image/png,image/jpeg"></div>
-    <div id="logoReport"><p class="note">No logo — a monogram will be generated from the company name.</p></div>
-
-    <h2>Content — English</h2>
-    <div class="f"><label for="i_name">Name</label><input id="i_name"></div>
-    <div class="f"><label for="i_role">Role</label><input id="i_role"></div>
-    <div class="f"><label for="i_company">Company</label><input id="i_company"></div>
-    <div class="f"><label for="i_quals">Qualifications / suffix</label><input id="i_quals" placeholder="MBBS (DMC), FCPS…"></div>
-
-    <h2>Content — বাংলা</h2>
-    <div class="f"><label for="i_bname">নাম</label><input id="i_bname" lang="bn"></div>
-    <div class="f"><label for="i_brole">পদবি</label><input id="i_brole" lang="bn"></div>
-    <div class="f"><label for="i_bcompany">প্রতিষ্ঠান</label><input id="i_bcompany" lang="bn"></div>
-
-    <h2>Contact routes</h2>
-    <div class="f"><label for="i_p1">Mobile 1</label><input id="i_p1"></div>
-    <div class="f"><label for="i_p2">Mobile 2</label><input id="i_p2"></div>
-    <div class="f"><label for="i_email">Email</label><input id="i_email"></div>
-    <div class="f"><label for="i_web">Web / Facebook</label><input id="i_web"></div>
-    <div class="f"><label for="i_addr">Address</label><input id="i_addr"></div>
-
-    <h2>Design</h2>
-    <div class="f"><label for="i_format">Format</label><select id="i_format"></select></div>
-    <div class="f"><label for="i_type">Type system</label><select id="i_type"></select></div>
-    <div class="f"><label for="i_pal">Palette</label><select id="i_pal"></select></div>
-    <div class="row2">
-      <div class="f"><label for="i_density">Density</label><select id="i_density">
-        <option value="airy">Airy</option><option value="balanced" selected>Balanced</option><option value="tight">Tight</option></select></div>
-      <div class="f"><label for="i_back">Back face</label><select id="i_back"></select></div>
-    </div>
-    <div class="f"><label for="i_script">Primary script</label><select id="i_script">
-      <option value="latin">Latin front / বাংলা back</option>
-      <option value="bangla">বাংলা front / Latin back</option>
-      <option value="latin-only">Latin only</option>
-      <option value="bangla-only">বাংলা only</option>
-    </select></div>
+    <div id="rail"></div>
   </div>
 
-  <!-- ─────────── GALLERY ─────────── -->
-  <div class="col">
-    <h2 id="galTitle">Six concepts, ranked</h2>
-    <p class="note" style="margin:0 0 10px" id="galNote"></p>
-    <div id="pipeline" class="trace" style="margin-bottom:14px"></div>
-    <div class="gal" id="gal"></div>
-    <div id="bulkPanel" style="display:none">
-      <p class="note" style="margin:0 0 10px">One approved design, one row per person, N print-ready cards, one order. Every row is composed and preflighted on its own — row 340 is the one with the 44-character name.</p>
-      <div class="f"><label for="i_csv">CSV — first row is the header</label>
-        <textarea id="i_csv" rows="7" spellcheck="false"></textarea></div>
-      <div class="chips" style="margin-bottom:12px">
-        <button class="chip" id="b_bulk">Generate all</button>
-        <button class="chip" id="b_bulk_sample">Load sample</button>
+  <div class="pane">
+    <!-- Step 1 -->
+    <div data-step="0" class="stack">
+      <div>
+        <h1>Who is the card for?</h1>
+        <p class="lede">This is the only part that has to be exact. Everything after it is a preference, and you can change your mind later.</p>
+      </div>
+      <hr class="hr">
+      <div class="grid2">
+        <div class="field"><label for="i_name">Full name</label><input class="input" id="i_name" autocomplete="name"></div>
+        <div class="field"><label for="i_role">Job title</label><input class="input" id="i_role" autocomplete="organization-title"></div>
+        <div class="field"><label for="i_company">Company</label><input class="input" id="i_company" autocomplete="organization"></div>
+        <div class="field"><label for="i_quals">Qualifications</label><input class="input" id="i_quals" placeholder="MBBS (DMC), FCPS…"></div>
+        <div class="field" style="grid-column:1/-1"><label for="i_industry">Industry</label><select class="input" id="i_industry"></select></div>
+      </div>
+      <hr class="hair">
+      <div>
+        <h6 style="margin-bottom:4px">Bangla — বাংলা</h6>
+        <p class="lede" style="font-size:13px;margin-top:0;margin-bottom:14px">Most cards here carry both scripts. Leave these blank for an English-only card.</p>
+        <div class="grid2">
+          <div class="field"><label for="i_bname">নাম</label><input class="input bn" id="i_bname" lang="bn"></div>
+          <div class="field"><label for="i_brole">পদবি</label><input class="input bn" id="i_brole" lang="bn"></div>
+          <div class="field" style="grid-column:1/-1"><label for="i_bcompany">প্রতিষ্ঠান</label><input class="input bn" id="i_bcompany" lang="bn"></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Step 2 -->
+    <div data-step="1" class="stack">
+      <div>
+        <h1>Where can people reach you?</h1>
+        <p class="lede">Add everything you have. The system decides what earns a place on the front and what moves to the back or behind the QR. Past five routes, none of them get read.</p>
+      </div>
+      <hr class="hr">
+      <div class="grid2">
+        <div class="field"><label for="i_p1">Mobile</label><input class="input" id="i_p1" inputmode="tel" autocomplete="tel"></div>
+        <div class="field"><label for="i_p2">Second mobile</label><input class="input" id="i_p2" inputmode="tel"></div>
+        <div class="field"><label for="i_email">Email</label><input class="input" id="i_email" inputmode="email" autocomplete="email"></div>
+        <div class="field"><label for="i_web">Website or Facebook page</label><input class="input" id="i_web" placeholder="fb.com/yourshop"></div>
+        <div class="field" style="grid-column:1/-1"><label for="i_addr">Address</label><input class="input" id="i_addr"></div>
+      </div>
+    </div>
+
+    <!-- Step 3 -->
+    <div data-step="2" class="stack">
+      <div>
+        <h1>Do you have a logo?</h1>
+        <p class="lede">Checked here, while you can still do something about it. A logo is never rejected at the export step, which is the moment trust dies.</p>
+      </div>
+      <hr class="hr">
+      <div class="field" style="max-width:460px">
+        <label for="i_logo">Upload SVG, PNG or JPG</label>
+        <input type="file" class="input" id="i_logo" accept=".svg,image/svg+xml,image/png,image/jpeg">
+      </div>
+      <div id="logoReport"></div>
+    </div>
+
+    <!-- Step 4 -->
+    <div data-step="3" class="stack">
+      <div>
+        <h1>How should it feel?</h1>
+        <p class="lede">Pick up to three. These become weights the ranker uses, not tags and not a style preset.</p>
+      </div>
+      <hr class="hr">
+      <span class="lbl" id="lbl_pers">Personality — pick up to 3</span>
+      <div class="chips" role="group" aria-labelledby="lbl_pers" id="i_personality"></div>
+      <p class="lede" id="persNote"></p>
+    </div>
+
+    <!-- Step 5 -->
+    <div data-step="4" class="stack">
+      <div>
+        <h1>Language and size</h1>
+        <p class="lede">Bangla is not a translation layer. It changes the minimum type size, the line height, and which layouts can hold the card at all.</p>
+      </div>
+      <hr class="hr">
+      <div class="grid2">
+        <div class="field"><label for="i_script">Script</label><select class="input" id="i_script">
+          <option value="latin">English front · বাংলা back</option>
+          <option value="bangla">বাংলা front · English back</option>
+          <option value="latin-only">English only</option>
+          <option value="bangla-only">বাংলা only</option>
+        </select></div>
+        <div class="field"><label for="i_format">Card size</label><select class="input" id="i_format"></select></div>
+      </div>
+    </div>
+
+    <!-- Step 6 -->
+    <div data-step="5" class="stack">
+      <div>
+        <h1>How should it be printed?</h1>
+        <p class="lede">Foil and spot UV are cheap in Dhaka relative to almost anywhere else, so a card that feels expensive is within an ordinary budget.</p>
+      </div>
+      <hr class="hr">
+      <span class="lbl" id="lbl_fin">Finishes</span>
+      <div class="chips" role="group" aria-labelledby="lbl_fin" id="i_finishes"></div>
+      <hr class="hair">
+      <div class="grid2">
+        <div class="field"><label for="i_density">Density</label><select class="input" id="i_density">
+          <option value="airy">Airy</option><option value="balanced" selected>Balanced</option><option value="tight">Tight</option>
+        </select></div>
+        <div class="field"><label for="i_back">Back of the card</label><select class="input" id="i_back"></select></div>
+        <div class="field"><label for="i_qty">Quantity</label><select class="input" id="i_qty">
+          <option>100</option><option>250</option><option selected>500</option><option>1000</option>
+        </select></div>
+        <div class="field"><label for="i_zone">Delivery</label><select class="input" id="i_zone">
+          <option value="dhaka">Inside Dhaka</option><option value="outside">Outside Dhaka</option>
+        </select></div>
+      </div>
+    </div>
+
+    <!-- Step 7 -->
+    <div data-step="6" class="stack">
+      <div>
+        <h1>Ready to compose</h1>
+        <p class="lede">The system will enumerate every layout, palette and type system against this brief, compose each one with your real text, preflight the geometry, and return the six that survive.</p>
+      </div>
+      <hr class="hr">
+      <dl class="kv" id="reviewKv"></dl>
+    </div>
+
+    <hr class="hr">
+    <div class="spread">
+      <button class="btn" id="b_prev">Back</button>
+      <div class="row">
+        <span class="micro" id="stepHint"></span>
+        <button class="btn btn-primary btn-lg" id="b_next">Continue</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="pane pane-r stack">
+    <div>
+      <h6>What this implies</h6>
+      <p class="lede" style="font-size:12.5px">Derived from the brief as you type. Nothing is chosen yet.</p>
+    </div>
+    <dl class="kv" id="implies"></dl>
+    <hr class="hair">
+    <div>
+      <h6 style="margin-bottom:8px">Start from a real card</h6>
+      <div class="chips" id="presets"></div>
+      <p class="lede" style="font-size:12px;margin-top:10px">Each one is a real Bangladeshi card type, chosen because it breaks the composer in a different way.</p>
+    </div>
+  </div>
+ </div>
+</section>
+
+<!-- ══════════════════ GENERATING ══════════════════ -->
+<section data-screen="generating">
+  <div class="wide" style="max-width:760px;margin:0 auto;padding-top:var(--space-12)">
+    <h1>Composing</h1>
+    <p class="lede">Every candidate is composed with your real text and measured against the print floor. Most die on fit, which is the point.</p>
+    <hr class="hr">
+    <div id="pipeline" class="stack" style="gap:0"></div>
+  </div>
+</section>
+
+<!-- ══════════════════ CONCEPTS ══════════════════ -->
+<section data-screen="concepts">
+  <div class="sectionhd">
+    <div>
+      <h2>Six concepts</h2>
+      <span class="micro" id="conceptsMeta"></span>
+    </div>
+    <div class="row">
+      <button class="btn" id="b_regen">Re-compose</button>
+      <button class="btn" id="b_tolibrary">Browse all layouts</button>
+    </div>
+  </div>
+  <div class="tiles" id="conceptTiles"></div>
+</section>
+
+<!-- ══════════════════ DETAIL ══════════════════ -->
+<section data-screen="detail">
+ <div class="cols-2">
+  <div class="pane stack">
+    <div class="spread">
+      <div>
+        <h2 id="detailName">Concept</h2>
+        <span class="micro" id="detailMeta"></span>
+      </div>
+      <div class="seg" role="group" aria-labelledby="lbl_side">
+        <span class="sr" id="lbl_side">Which face</span>
+        <button data-side="front" aria-pressed="true">Front</button>
+        <button data-side="back" aria-pressed="false">Back</button>
+        <button data-side="both" aria-pressed="false">Both</button>
+      </div>
+    </div>
+    <div id="detailCard" class="stack"></div>
+    <dl class="kv" id="detailKv"></dl>
+  </div>
+
+  <div class="pane pane-r stack">
+    <div>
+      <h6>Why this one</h6>
+      <p id="why" style="margin-top:10px;font-size:14px"></p>
+    </div>
+    <div>
+      <h6 style="margin-bottom:10px">Score</h6>
+      <div id="score"></div>
+    </div>
+    <hr class="hair">
+    <div>
+      <h6 style="margin-bottom:8px">Change it</h6>
+      <div class="field"><label class="sr" for="i_instr">Instruction</label>
+        <input class="input" id="i_instr" placeholder="Make it more premium · নাম বড় করুন"></div>
+      <div class="row" style="margin-top:10px">
+        <button class="btn btn-primary" id="b_apply">Apply</button>
+        <button class="btn" id="b_undo">Undo</button>
+        <button class="btn btn-ghost" id="b_reset">Reset</button>
+      </div>
+      <div id="instr" style="margin-top:12px"></div>
+      <p class="lede" style="font-size:12px">Free text resolves to operations from a closed set. An instruction can never move an element or set a size; the geometry is always re-composed.</p>
+    </div>
+    <hr class="hair">
+    <div class="row">
+      <button class="btn" id="b_validate">Validate</button>
+      <button class="btn btn-primary" id="b_toexport">Export or order</button>
+    </div>
+  </div>
+ </div>
+</section>
+
+<!-- ══════════════════ VALIDATE ══════════════════ -->
+<section data-screen="validate">
+  <div class="sectionhd">
+    <div>
+      <h2>Preflight</h2>
+      <span class="micro" id="pfTally"></span>
+    </div>
+    <button class="btn" id="b_backdetail">Back to the card</button>
+  </div>
+  <div class="cols-2">
+    <div class="pane">
+      <div id="preflight"></div>
+    </div>
+    <div class="pane pane-r stack">
+      <div>
+        <h6>What the composer did</h6>
+        <div id="trace" class="stack" style="gap:6px;margin-top:10px;font-size:12.5px"></div>
+      </div>
+      <hr class="hair">
+      <div>
+        <h6 style="margin-bottom:8px">DesignSpec</h6>
+        <div class="pre" id="spec"></div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ══════════════════ EXPORT ══════════════════ -->
+<section data-screen="export">
+  <div class="sectionhd">
+    <div><h2>Export or order</h2><span class="micro" id="exportMeta"></span></div>
+    <button class="btn" id="b_backdetail2">Back to the card</button>
+  </div>
+  <div class="cols-2">
+    <div class="pane stack">
+      <div>
+        <h6 style="margin-bottom:10px">Print files</h6>
+        <div class="chips" id="exports"></div>
+        <p class="lede" style="font-size:12.5px">Document geometry with bleed and trim marks, plus a 100% K separation for each special. Fonts are outlined at the PDF step.</p>
+      </div>
+      <hr class="hair">
+      <div>
+        <h6 style="margin-bottom:10px">Share</h6>
+        <div class="row">
+          <button class="btn btn-primary" id="b_save">Save and get a link</button>
+        </div>
+        <div id="saveOut" style="margin-top:10px"></div>
+        <dl class="kv" id="identity" style="margin-top:12px"></dl>
+      </div>
+    </div>
+    <div class="pane pane-r stack">
+      <div>
+        <h6 style="margin-bottom:10px">Quote</h6>
+        <div id="quote"></div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ══════════════════ LIBRARY ══════════════════ -->
+<section data-screen="library">
+  <div class="sectionhd">
+    <div>
+      <h2>Template library</h2>
+      <span class="micro" id="libMeta"></span>
+    </div>
+    <button class="btn" id="b_toconcepts">Back to concepts</button>
+  </div>
+  <div class="tiles" id="libTiles"></div>
+</section>
+
+<!-- ══════════════════ BULK ══════════════════ -->
+<section data-screen="bulk">
+  <div class="sectionhd">
+    <div><h2>Bulk orders</h2><span class="micro" id="bulkMeta"></span></div>
+  </div>
+  <div class="cols-2">
+    <div class="pane stack">
+      <p class="lede" style="margin-top:0">One approved design, one row per person, N print-ready cards, one invoice. Every row is composed and preflighted on its own, because row 340 is the one with the 44-character name.</p>
+      <div class="field">
+        <label for="i_csv">CSV — the first row is the header</label>
+        <textarea class="input" id="i_csv" rows="8" spellcheck="false"></textarea>
+      </div>
+      <div class="row">
+        <button class="btn btn-primary" id="b_bulk">Compose all rows</button>
+        <button class="btn" id="b_bulk_sample">Load a sample</button>
       </div>
       <div id="bulkOut"></div>
     </div>
+    <div class="pane pane-r stack">
+      <div>
+        <h6>Template</h6>
+        <p class="lede" style="font-size:12.5px">The design every row is poured into.</p>
+      </div>
+      <div id="bulkTemplate"></div>
+    </div>
   </div>
+  <div class="tiles" id="bulkTiles"></div>
+</section>
 
-  <!-- ─────────── DETAIL ─────────── -->
-  <div class="col">
-    <h2 id="selTitle">Selected</h2>
-    <div class="tabs">
-      <button class="tab" data-side="front" aria-pressed="true">Front</button>
-      <button class="tab" data-side="back" aria-pressed="false">Back</button>
-      <button class="tab" data-side="both" aria-pressed="false">Both</button>
-    </div>
-    <div id="detail"></div>
-
-    <h2>Preflight</h2>
-    <div id="preflight"></div>
-
-    <h2>Identity</h2>
-    <div id="identity"></div>
-    <div class="chips" style="margin-top:8px">
-      <button class="chip" id="b_save">Save &amp; get share link</button>
-    </div>
-    <div id="saveOut"></div>
-
-    <h2>Refine — type an instruction</h2>
-    <div class="f"><label class="sr" for="i_instr">Instruction</label><input id="i_instr" placeholder="Make it more premium / নাম বড় করুন"></div>
-    <div class="chips" style="margin-bottom:8px">
-      <button class="chip" id="b_apply">Apply</button>
-      <button class="chip" id="b_undo">Undo</button>
-      <button class="chip" id="b_reset">Reset to concept</button>
-    </div>
-    <div id="instr"></div>
-    <p class="note">Free text is classified into operations from a closed set. Geometry is always re-composed — an instruction can never move an element or set a size directly.</p>
-
-    <h2>Why this concept</h2>
-    <div id="why" style="font-size:12px"></div>
-
-    <h2>Score</h2>
-    <div id="score"></div>
-
-    <h2>Quote</h2>
-    <div id="quote"></div>
-
-    <h2>Print output</h2>
-    <div class="chips" id="exports"></div>
-    <p class="note">Document geometry with bleed and trim marks, plus a 100% K separation per special. This is what a PDF/X-4 writer consumes — fonts outlined at that step.</p>
-
-    <h2>Fit ladder — what the composer did</h2>
-    <div class="trace" id="trace"></div>
-
-    <h2>DesignSpec (excerpt)</h2>
-    <pre id="spec"></pre>
-  </div>
+</main>
 </div>
 
 <script>
@@ -274,8 +681,8 @@ const FORMATS = [
    All families below are SIL OFL: embeddable and outline-able in
    commercial print output. This is a hard library policy.               */
 const TYPE_SYSTEMS = [
-  { id:'typ.siliguri', name:'Hind Siliguri + Space Grotesk', note:'Workhorse. Best Bangla legibility at small sizes.',
-    latin:"'Space Grotesk',sans-serif", bangla:"'Hind Siliguri',sans-serif", banglaOk:true, weightName:600 },
+  { id:'typ.siliguri', name:'Hind Siliguri + Libre Franklin', note:'Workhorse. Best Bangla legibility at small sizes.',
+    latin:"'Libre Franklin',sans-serif", bangla:"'Hind Siliguri',sans-serif", banglaOk:true, weightName:600 },
   { id:'typ.noto',     name:'Noto Sans Bengali + Archivo', note:'Widest conjunct coverage. Safest for uncommon names.',
     latin:"'Archivo',sans-serif", bangla:"'Noto Sans Bengali',sans-serif", banglaOk:true, weightName:700 },
   { id:'typ.tiro',     name:'Tiro Bangla + Playfair Display', note:'Editorial. Traditional Bangla letterforms, high contrast.',
@@ -1981,468 +2388,611 @@ function separationSVG(c, kind){
   <g transform="translate(${b},${b})">${body}</g></svg>`, areaPct:+areaPct };
 }
 
-/* ═══════════════════════════ DEMO HARNESS ═══════════════════════════ */
-const $ = s => document.querySelector(s);
-const state = { mode:'generate', preset:0, layout:'lay.centered', side:'front', pick:0,
+/* ══════════════════════════════════════════════════════════════════════════
+   PRODUCT SHELL
+   --------------------------------------------------------------------------
+   The engine above is untouched. This is the surface: the prototype's own
+   information architecture — nav, crumb, numbered rail, one screen at a time
+   — driving the real composer instead of static data.
+   ══════════════════════════════════════════════════════════════════════ */
+
+const $  = s => document.querySelector(s);
+const $$ = s => document.querySelectorAll(s);
+
+/* Authored icons. One library, 1.5px stroke, 16px box — never a unicode
+   glyph standing in for an icon. */
+const svg = d => `<svg width="15" height="15" viewBox="0 0 16 16" fill="none"
+  stroke="currentColor" stroke-width="1.5" stroke-linecap="square" aria-hidden="true">${d}</svg>`;
+const ICON = {
+  check:  svg('<path d="M2.5 8.2 6.2 12 13.5 4"/>'),
+  next:   svg('<path d="M2 8h11M9 4l4 4-4 4"/>'),
+  prev:   svg('<path d="M14 8H3M7 4 3 8l4 4"/>'),
+  down:   svg('<path d="M8 2v9M4.5 7.5 8 11l3.5-3.5M2.5 13.5h11"/>'),
+  pass:   svg('<path d="M3 8.4 6.1 11.5 13 4.5"/>'),
+  review: svg('<path d="M8 2.5 14.5 13.5h-13z"/><path d="M8 6.5v3"/><path d="M8 11.6v.4"/>'),
+  fail:   svg('<path d="M4 4l8 8M12 4l-8 8"/>'),
+  dot:    svg('<circle cx="8" cy="8" r="3" fill="currentColor" stroke="none"/>')
+};
+const STATE_ICON = { pass:'pass', review:'review', fail:'fail' };
+
+const SCREENS = ['brief','generating','concepts','detail','validate','export','library','bulk'];
+const NAV = [['brief','Brief'],['concepts','Concepts'],['library','Library'],['bulk','Bulk']];
+const STEPS = [
+  ['01','Who it is for'], ['02','Contact routes'], ['03','Logo'],
+  ['04','Personality'],   ['05','Language and size'], ['06','Printing'], ['07','Review']
+];
+
+const state = {
+  screen:'brief', step:0, side:'front', pick:0,
   format:'bd-std', type:'typ.siliguri', palette:'pal.gold', density:'balanced',
-  back:'back.bangla', script:'latin',
+  back:'back.bangla', script:'latin', layout:'lay.centered',
   industry:'doctor', personality:['traditional','premium'], finishes:['matte','foil'],
-  qty:500, zone:'dhaka', refine:null, instrLog:[], history:[], logo:null, bulk:null, shareCode:null };
+  qty:500, zone:'dhaka',
+  refine:null, instrLog:[], history:[], logo:null, bulk:null, shareCode:null,
+  gen:null, genStage:0, seen:0
+};
+
+const esc = s => String(s ?? '').replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+const taka = n => '৳' + Number(n).toLocaleString('en-IN');
+const reduced = () => typeof matchMedia === 'function' &&
+  matchMedia('(prefers-reduced-motion: reduce)').matches;
 
 function readForm(){
-  return { logo: state.logo, name:$('#i_name').value, role:$('#i_role').value, company:$('#i_company').value, quals:$('#i_quals').value,
-           bname:$('#i_bname').value, brole:$('#i_brole').value, bcompany:$('#i_bcompany').value,
-           p1:$('#i_p1').value, p2:$('#i_p2').value, email:$('#i_email').value, web:$('#i_web').value, addr:$('#i_addr').value };
+  return { logo: state.logo, name:$('#i_name').value, role:$('#i_role').value,
+    company:$('#i_company').value, quals:$('#i_quals').value,
+    bname:$('#i_bname').value, brole:$('#i_brole').value, bcompany:$('#i_bcompany').value,
+    p1:$('#i_p1').value, p2:$('#i_p2').value, email:$('#i_email').value,
+    web:$('#i_web').value, addr:$('#i_addr').value };
 }
 function writeForm(c){
-  const m = {i_name:'name',i_role:'role',i_company:'company',i_quals:'quals',i_bname:'bname',i_brole:'brole',
-             i_bcompany:'bcompany',i_p1:'p1',i_p2:'p2',i_email:'email',i_web:'web',i_addr:'addr'};
-  for (const k in m) $('#'+k).value = c[m[k]] || '';
+  const m = {i_name:'name',i_role:'role',i_company:'company',i_quals:'quals',i_bname:'bname',
+    i_brole:'brole',i_bcompany:'bcompany',i_p1:'p1',i_p2:'p2',i_email:'email',i_web:'web',i_addr:'addr'};
+  for (const k in m){ const el = $('#'+k); if (el) el.value = c[m[k]] || ''; }
 }
 
 function specFor(layoutId, content){
   return { format:state.format, type:state.type, palette:state.palette,
            density:state.density, layout:layoutId, content,
-           share: { origin: (typeof location !== 'undefined' && location.origin &&
-                             /^https?:/.test(location.origin)) ? location.origin : 'https://cardworks.bd',
-                    code: state.shareCode || null } };
+           share:{ origin:(typeof location !== 'undefined' && location.origin &&
+                           /^https?:/.test(location.origin)) ? location.origin : 'https://cardworks.bd',
+                   code: state.shareCode || null } };
+}
+function composeForced(layoutId, content, forceScript, over){
+  const L = LAYOUTS.find(l => l.id === layoutId);
+  const i = LAYOUTS.indexOf(L);
+  if (forceScript) LAYOUTS[i] = { ...L, forceScript };
+  const c = compose(Object.assign(specFor(layoutId, content), over || {}));
+  LAYOUTS[i] = L;
+  return c;
 }
 
-function frontLayouts(){ return LAYOUTS.filter(l=>l.face==='front'); }
-
-let lastDesign = null;
-
-/* Click AND keyboard. A tile that only responds to a mouse is not a control,
-   and this harness is the reference for how the product should behave. */
-function bindTiles(fn){
-  $('#gal').querySelectorAll('.tile').forEach(t => {
+function bindTiles(sel, fn){
+  $$(sel).forEach(t => {
     t.onclick = () => fn(t);
     t.onkeydown = e => { if (e.key === 'Enter' || e.key === ' '){ e.preventDefault(); fn(t); } };
   });
 }
 
-function draw(){
+let lastDesign = null;
+function go(screen){ state.screen = screen; if (typeof scrollTo === 'function') scrollTo(0,0); draw(); }
+
+/* ── the one authored motion moment ───────────────────────────────────────
+   Generation is already finished when this runs; the stages reveal the real
+   counts it produced. Short and staggered, so it reads as a composition
+   resolving rather than a progress bar pretending to work. */
+function runGenerate(){
   const content = readForm();
-  const bnFirst   = state.script === 'bangla';
-  const banglaOnly= state.script === 'bangla-only';
-  const latinOnly = state.script === 'latin-only';
-  const frontScript = (bnFirst || banglaOnly) ? 'bangla' : null;
+  const frontScript = (state.script === 'bangla' || state.script === 'bangla-only') ? 'bangla' : null;
+  state.gen = generate({ industry:state.industry, personality:state.personality,
+    format:state.format, density:state.density, script: frontScript ? 'bangla' : 'latin' }, content);
+  state.pick = 0; state.refine = null; state.history = []; state.instrLog = [];
+  state.genStage = 0;
+  go('generating');
+  if (reduced()){ state.genStage = 99; go('concepts'); return; }
+  const tick = () => {
+    state.genStage++;
+    if (state.genStage > 6){ go('concepts'); return; }
+    draw(); setTimeout(tick, 70);
+  };
+  setTimeout(tick, 90);
+}
 
-  const brief = { industry:state.industry, personality:state.personality,
-                  format:state.format, density:state.density, script:frontScript ? 'bangla' : 'latin' };
-
-  let composedSel = null, composedBack = null, selCand = null, gen = null;
-  let html = '';
-
-  if (state.mode === 'generate'){
-    gen = generate(brief, content);
-    if (state.pick >= gen.picked.length) state.pick = 0;
-    selCand = gen.picked[state.pick] || null;
-    composedSel = selCand ? selCand.composed : null;
-
-    $('#galTitle').textContent = `${gen.picked.length} concepts, ranked`;
-    $('#galNote').innerHTML = `Scored on personality fit, industry fit, print safety and legibility headroom — every number below is computed, none is authored. <b>${gen.intent.note}.</b>`;
-    $('#pipeline').innerHTML = [
-      ['Reading the brief', Object.keys(gen.intent.vector).filter(k=>gen.intent.vector[k]>0).length + ' signals'],
-      ['Enumerating layout × palette × type', gen.stages.enumerated + ' candidates'],
-      ['Composing with real text metrics', gen.stages.composed + ' survived the fit ladder'],
-      ['Preflighting geometry', gen.stages.printSafe + ' passed with no blocking finding'],
-      ['Scoring', gen.considered + ' ranked'],
-      ['Enforcing diversity', gen.stages.selected + ' selected']
-    ].map(([a,b])=>`<div><b>${a}</b> → ${b}</div>`).join('');
-
-    gen.picked.forEach((c,i)=>{
-      const svg = renderSVG(c.composed);
-      const L = LAYOUTS.find(l=>l.id===c.layout);
-      html += `<div class="tile" role="button" tabindex="0" aria-pressed="${i===state.pick}" data-pick="${i}" data-sel="${i===state.pick?1:0}">
-        ${svg}
-        <h3>${String(i+1).padStart(2,'0')} · ${L.name}</h3>
-        <div class="m">${PALETTES.find(p=>p.id===c.palette).name} · ${TYPE_SYSTEMS.find(t=>t.id===c.type).name.split(' + ')[0]}</div>
-        <div style="display:flex;align-items:center;gap:7px;margin-top:7px">
-          <span style="flex:1;height:5px;background:var(--divider);display:block">
-            <span style="display:block;height:5px;width:${(c.score.total*100).toFixed(0)}%;background:var(--accent)"></span></span>
-          <span class="m">${(c.score.total*100).toFixed(0)}/100</span></div>
-      </div>`;
-    });
-    $('#gal').innerHTML = html;
-    bindTiles(t => { state.pick = +t.dataset.pick; draw(); });
-    $('#perf').textContent = `${gen.stages.enumerated} candidates → ${gen.stages.selected} in ${gen.ms} ms`;
-
-  } else if (state.mode === 'bulk'){
-    $('#galTitle').textContent = 'Bulk generation';
-    $('#galNote').innerHTML = '';
-    $('#pipeline').innerHTML = '';
-    $('#gal').innerHTML = '';
-    $('#perf').textContent = state.bulk ? `${state.bulk.ok}/${state.bulk.total} rows composed` : 'paste a CSV';
-
-  } else {
-    $('#galTitle').textContent = 'Every layout in the library, composed live';
-    $('#galNote').innerHTML = 'One renderer walks slot records. There is no per-layout markup anywhere in this file. A layout that cannot hold this content is <b>eliminated</b>, not drawn badly — that is the guarantee.';
-    $('#pipeline').innerHTML = '';
-    const t0 = performance.now();
-    for (const L of LAYOUTS.filter(l=>l.face==='front')){
-      const c2 = composeForced(L.id, content, frontScript);
-      const svg = renderSVG(c2);
-      if (L.id === state.layout) composedSel = c2;
-      html += `<div class="tile ${svg?'':'dead'}" role="button" tabindex="0" aria-pressed="${L.id===state.layout}" data-lay="${L.id}" data-sel="${L.id===state.layout?1:0}">
-        ${svg || `<div style="aspect-ratio:${89/51};display:flex;align-items:center;justify-content:center;background:#fff;border:1px dashed var(--divider);color:var(--accent);font-size:11px;text-align:center;padding:12px;flex-direction:column;gap:5px"><b style="letter-spacing:.14em">ELIMINATED</b><span style="color:var(--muted);font-size:10px;display:block">${c2.eliminated||''}</span></div>`}
-        <h3>${L.name}</h3>
-        <div class="m">${L.family} · ${svg ? (c2.trace.length? c2.trace.length+' fit adjustment(s)':'fits as authored') : 'eliminated'}</div>
-      </div>`;
-    }
-    $('#gal').innerHTML = html;
-    bindTiles(t => { state.layout = t.dataset.lay; draw(); });
-    $('#perf').textContent = `9 layouts composed in ${(performance.now()-t0).toFixed(1)} ms`;
-  }
-
-  /* ── Refinement ────────────────────────────────────────────────────────
-     An applied instruction produces a DESIGN (a set of component choices),
-     which is then re-composed from scratch. Nothing is patched in place —
-     which is why a refined card is exactly as print-safe as a generated one. */
-  const baseBack = banglaOnly ? 'back.contact'
-                 : latinOnly  ? (state.back==='back.bangla' ? 'back.contact' : state.back)
+function currentDesign(){
+  const cand = state.gen && state.gen.picked[state.pick];
+  const frontScript = (state.script === 'bangla' || state.script === 'bangla-only') ? 'bangla' : null;
+  const baseBack = state.script === 'bangla-only' ? 'back.contact'
+                 : state.script === 'latin-only' ? (state.back === 'back.bangla' ? 'back.contact' : state.back)
                  : state.back;
-  let design = selCand
-    ? { layout:selCand.layout, palette:selCand.palette, type:selCand.type,
-        density:state.density, back:baseBack, format:state.format,
-        script:frontScript ? 'bangla' : 'latin', finishes:state.finishes.slice() }
-    : { layout:state.layout, palette:state.palette, type:state.type,
-        density:state.density, back:baseBack, format:state.format,
-        script:frontScript ? 'bangla' : 'latin', finishes:state.finishes.slice() };
-  if (state.refine) design = state.refine;
-  lastDesign = design;
+  const base = cand
+    ? { layout:cand.layout, palette:cand.palette, type:cand.type }
+    : { layout:state.layout, palette:state.palette, type:state.type };
+  const d = { ...base, density:state.density, back:baseBack, format:state.format,
+              script: frontScript ? 'bangla' : 'latin', finishes:state.finishes.slice() };
+  return state.refine || d;
+}
 
-  const frontFS = design.script === 'bangla' ? 'bangla' : null;
-  const dOver = { palette:design.palette, type:design.type,
-                  density:design.density, format:design.format };
-  /* Library mode picks its card from the gallery loop; every other mode
-     composes from the resolved design. In bulk mode this is the TEMPLATE —
-     the design each row is poured into — so the detail panel must show it
-     rather than reporting an empty selection. */
-  if (state.mode !== 'library' || state.refine){
-    composedSel = composeForced(design.layout, content, frontFS, dOver);
-  }
-  const backId = design.back;
-  composedBack = composeForced(backId, content,
-      backId==='back.bangla' ? 'bangla' : (frontFS ? 'latin' : null), dOver);
+function checkRow(f){
+  const k = STATE_ICON[f.s] || 'dot';
+  return `<div class="check"><span class="ico i-${f.s}">${ICON[k]}</span><span>${
+    f.face ? `<b>${f.face}</b> · ` : ''}${esc(f.label)}${
+    f.note ? `<span class="note">${esc(f.note)}</span>` : ''}</span></div>`;
+}
 
-  // instruction feedback
-  const log = state.instrLog[state.instrLog.length-1];
-  $('#instr').innerHTML = !log ? '<p class="note">Nothing applied yet.</p>'
-    : log.unmapped
-      ? `<div class="chk"><span class="dot d-review"></span><span>${log.note}<span class="note">Closest things it can do: ${log.suggestions.join(' · ')}</span></span></div>`
-      : `<div class="chk"><span class="dot d-pass"></span><span>Understood as <b>${log.matched.join(' + ')}</b>
-          <span class="note">${log.ops.map(o=>`${o.op}(${o.arg})`).join(' · ')}</span></span></div>`
-        + (log.changes.length
-            ? log.changes.map(c=>`<div class="chk" style="padding:4px 0"><span class="dot d-pass" style="opacity:0"></span><span class="m">${c.key}: ${c.from} → <b>${c.to}</b></span></div>`).join('')
-            : '<p class="note">Already in that state — nothing changed.</p>');
+function facesFor(design, content){
+  const fs = design.script === 'bangla' ? 'bangla' : null;
+  const over = { palette:design.palette, type:design.type, density:design.density, format:design.format };
+  const front = composeForced(design.layout, content, fs, over);
+  const back  = composeForced(design.back, content,
+    design.back === 'back.bangla' ? 'bangla' : (fs ? 'latin' : null), over);
+  return { front, back };
+}
 
-  // ── detail ──
-  const guides = true;
-  const sel = state.side==='back' ? composedBack : composedSel;
-  let det = state.side === 'both'
-    ? (renderSVG(composedSel,{guides})||'') + (renderSVG(composedBack,{guides})||'')
-    : (renderSVG(sel,{guides}) || `<p style="color:var(--accent);font-size:12px">Eliminated — ${sel?.eliminated||''}</p>`);
-  if (composedSel) det += `<div class="kv" style="margin-top:10px">
-    <b>Trim</b><span>${composedSel.fmt.w} × ${composedSel.fmt.h} mm</span>
-    <b>Document</b><span>${composedSel.fmt.w+2*composedSel.fmt.bleed} × ${composedSel.fmt.h+2*composedSel.fmt.bleed} mm with bleed</span>
-    <b>Type</b><span>${composedSel.type.name}</span>
-    <b>Palette</b><span>${composedSel.pal.name}</span></div>
-  <p class="note">Blue dashes = 4 mm safe area. Red boxes = slot geometry the composer resolved.</p>`;
-  $('#detail').innerHTML = det;
-  $('#selTitle').textContent = state.mode === 'bulk' ? 'Template — applied to every row' : 'Selected';
-
-  // ── why + score ──
-  if (selCand){
-    $('#why').innerHTML = `<p>${selCand.why}</p>
-      <p class="note">Generated from the decision trace — it cannot state a reason the ranker did not use.</p>`;
-    const P = selCand.score.parts;
-    $('#score').innerHTML = `<div class="kv" style="margin-bottom:8px"><b>Total</b><span>${(selCand.score.total*100).toFixed(1)} / 100</span></div>` +
-      Object.keys(W).map(k=>`<div class="chk" style="padding:5px 0">
-        <span style="flex:1">${k.replace(/([A-Z])/g,' $1').toLowerCase()} <span class="note" style="display:inline">× ${W[k]}</span></span>
-        <span style="width:70px;height:5px;background:var(--divider);display:block;margin-top:6px">
-          <span style="display:block;height:5px;width:${(P[k]*100).toFixed(0)}%;background:var(--accent)"></span></span>
-        <span class="m" style="width:34px;text-align:right">${(P[k]*100).toFixed(0)}</span></div>`).join('');
-  } else {
-    $('#why').innerHTML = '<p class="note">Switch to Generate to see a ranked concept with its reasoning.</p>';
-    $('#score').innerHTML = '';
-  }
-
-  // ── preflight ──
-  const pf = [...preflight(composedSel).map(f=>({...f,face:'Front'})),
-              ...preflight(composedBack).map(f=>({...f,face:'Back'}))];
-  const present = new Set([...(composedSel?.elements||[]), ...(composedBack?.elements||[])]
-    .filter(e=>e.fit).map(e=>e.ref));
+function allFindings(front, back){
+  const pf = [...preflight(front).map(f => ({...f, face:'Front'})),
+              ...preflight(back).map(f => ({...f, face:'Back'}))];
+  const present = new Set([...(front?.elements||[]), ...(back?.elements||[])]
+    .filter(e => e.fit).map(e => e.ref));
   for (const ref in SLOTDEFS){
     if (!SLOTDEFS[ref].required) continue;
     pf.unshift(present.has(ref)
       ? { s:'pass', face:'Card', label:`Required field present: ${ref}`, note:'' }
       : { s:'fail', face:'Card', label:`Required field missing from both faces: ${ref}`,
-          note:'choose a back face that carries it, or a front layout that has the slot' });
+          note:'choose a back that carries it, or a front layout that has the slot' });
   }
-  $('#preflight').innerHTML =
-    `<p class="note" style="margin:0 0 8px">${pf.filter(f=>f.s==='fail').length} blocking · ${pf.filter(f=>f.s==='review').length} advisory · ${pf.filter(f=>f.s==='pass').length} pass</p>` +
-    pf.map(f=>`<div class="chk"><span class="dot d-${f.s}"></span><span><b style="font-weight:600">${f.face} —</b> ${f.label}${f.note?`<span class="note">${f.note}</span>`:''}</span></div>`).join('');
+  return pf;
+}
 
-  // ── quote ──
-  const q = quote(+state.qty, state.finishes, state.zone);
-  $('#quote').innerHTML = q.lines.map(l=>`<div class="chk" style="padding:5px 0"><span style="flex:1">${l.label}</span><span class="m">৳${l.cost.toLocaleString('en-BD')}</span></div>`).join('')
-    + `<div class="chk" style="border-bottom:0"><span style="flex:1"><b>Customer price</b><span class="note">৳${q.unit} per card · ${q.marginPct}% gross (৳${q.gross.toLocaleString('en-BD')})</span></span><span class="m"><b>৳${q.retail.toLocaleString('en-BD')}</b></span></div>`
-    + `<p class="note" style="color:var(--warn)">${q.note}</p>`;
+/* ══════════════════════════ RENDER ══════════════════════════ */
+function draw(){
+  const content = readForm();
+  const design  = currentDesign();
+  lastDesign = design;
 
-  // ── exports ──
-  const blocking = pf.filter(f=>f.s==='fail').length;
-  if (composedSel && !blocking){
-    const files = [['card_front_print.svg', printDocSVG(composedSel)],
-                   ['card_back_print.svg',  printDocSVG(composedBack)]];
+  $$('[data-screen]').forEach(s => {
+    s.style.display = s.dataset.screen === state.screen ? 'block' : 'none';
+  });
+  $('#crumb').textContent = {
+    brief:`Brief · step ${state.step+1} of 7`, generating:'Composing',
+    concepts:'Six concepts', detail:'Refining', validate:'Preflight',
+    export:'Export or order', library:'Template library', bulk:'Bulk orders'
+  }[state.screen] || '';
+  $('#navlinks').innerHTML = NAV.map(([s,l]) =>
+    `<button class="btn btn-ghost" data-go="${s}" aria-current="${state.screen===s}">${l}</button>`).join('');
+  $$('#navlinks [data-go]').forEach(b => b.onclick = () => go(b.dataset.go));
+
+  if (state.screen === 'brief')      drawBrief(content);
+  if (state.screen === 'generating') drawGenerating();
+  if (state.screen === 'concepts')   drawConcepts();
+  if (state.screen === 'detail')     drawDetail(design, content);
+  if (state.screen === 'validate')   drawValidate(design, content);
+  if (state.screen === 'export')     drawExport(design, content);
+  if (state.screen === 'library')    drawLibrary(content);
+  if (state.screen === 'bulk')       drawBulk(design, content);
+}
+
+/* ── Brief ─────────────────────────────────────────────────────────────── */
+function drawBrief(content){
+  $$('[data-step]').forEach(p => {
+    p.style.display = Number(p.dataset.step) === state.step ? 'flex' : 'none';
+  });
+  $('#rail').innerHTML = STEPS.map(([n,l],i) =>
+    `<button class="railitem" data-step-go="${i}" aria-current="${i===state.step?'step':'false'}">
+      <span class="railnum">${n}</span><span>${l}</span>
+      ${i < state.step ? `<span class="railmark">${ICON.check}</span>` : ''}
+    </button>`).join('');
+  $$('#rail [data-step-go]').forEach(b =>
+    b.onclick = () => { state.step = Number(b.dataset.stepGo); draw(); });
+
+  const last = state.step === 6;
+  $('#b_next').innerHTML = last
+    ? `Compose six concepts ${ICON.next}` : `Continue ${ICON.next}`;
+  $('#b_prev').innerHTML = `${ICON.prev} Back`;
+  $('#b_prev').disabled = state.step === 0;
+  $('#stepHint').textContent = last ? 'About a second' : 'You can come back to any step';
+
+  const sel = state.personality;
+  $('#persNote').textContent = sel.length
+    ? `${sel.length} of 3 — ${sel.map(a => AXIS_WORD[a]).join(', ')}`
+    : 'Nothing selected. The system will infer from the industry instead, and say so.';
+
+  const intent = resolveIntent({ industry:state.industry, personality:state.personality });
+  const lux = state.personality.includes('premium') || state.personality.includes('traditional');
+  $('#implies').innerHTML = [
+    ['Reading', intent.note],
+    ['Script', { latin:'English front, বাংলা back', bangla:'বাংলা front, English back',
+                 'latin-only':'English only', 'bangla-only':'বাংলা only' }[state.script]],
+    ['Type floor', (state.script === 'latin-only') ? '6.0 pt' : '7.5 pt — Bangla conjuncts'],
+    ['Palette', lux ? 'Dark ground, one metal' : 'High contrast, restrained'],
+    ['Finishes', state.finishes.map(f => FINISH_COST[f].label).join(' · ') || 'None yet'],
+    ['Run', `${state.qty} cards`]
+  ].map(([k,v]) => `<dt>${k}</dt><dd>${esc(v)}</dd>`).join('');
+
+  if (last){
+    $('#reviewKv').innerHTML = [
+      ['Name', content.name || '—'], ['Role', content.role || '—'],
+      ['Company', content.company || '—'],
+      ['বাংলা', content.bname || '—'],
+      ['Routes', [content.p1, content.p2, content.email, content.web].filter(Boolean).length + ' collected'],
+      ['Industry', INDUSTRIES[state.industry].label],
+      ['Personality', state.personality.map(a => AXIS_WORD[a]).join(' · ') || 'inferred'],
+      ['Size', FORMATS.find(f => f.id === state.format).name],
+      ['Logo', state.logo ? 'Accepted' : 'Monogram from the company name']
+    ].map(([k,v]) => `<dt>${k}</dt><dd>${esc(v)}</dd>`).join('');
+  }
+}
+
+/* ── Generating ────────────────────────────────────────────────────────── */
+function drawGenerating(){
+  const g = state.gen; if (!g) return;
+  const rows = [
+    ['Reading the brief', Object.keys(g.intent.vector).filter(k => g.intent.vector[k] > 0).length + ' signals'],
+    ['Enumerating layout × palette × type', g.stages.enumerated + ' candidates'],
+    ['Composing with your real text', g.stages.composed + ' survived the fit ladder'],
+    ['Preflighting geometry', g.stages.printSafe + ' with no blocking finding'],
+    ['Scoring against the brief', g.considered + ' ranked'],
+    ['Enforcing diversity', g.stages.selected + ' selected']
+  ];
+  $('#pipeline').innerHTML = rows.map(([a,b],i) => {
+    const done = state.genStage > i, now = state.genStage === i;
+    return `<div class="check ${done?'stage':''}" style="${done?'':'opacity:.32'}">
+      <span class="ico ${done?'i-pass':''} ${now?'ticking':''}">${done?ICON.pass:ICON.dot}</span>
+      <span>${a}<span class="note mono">${done?b:''}</span></span></div>`;
+  }).join('');
+}
+
+/* ── Concepts ──────────────────────────────────────────────────────────── */
+function drawConcepts(){
+  const g = state.gen;
+  if (!g || !g.picked.length){
+    $('#conceptTiles').innerHTML = `<div class="empty">Nothing survived the constraints.
+      Loosen a finish, shorten a field, or choose a larger card.</div>`;
+    return;
+  }
+  $('#conceptsMeta').textContent =
+    `${g.stages.enumerated} candidates · ${g.stages.composed} composed · ${g.stages.selected} selected · ${g.ms < 1 ? 'under 1' : g.ms} ms`;
+  $('#conceptTiles').innerHTML = g.picked.map((c,i) => {
+    const L = LAYOUTS.find(l => l.id === c.layout);
+    return `<button class="tile ${state.seen ? '' : 'resolve'}" role="button" tabindex="0"
+      aria-pressed="${i===state.pick}" data-pick="${i}" style="animation-delay:${i*55}ms">
+      ${renderSVG(c.composed)}
+      <span class="tiletitle">${String(i+1).padStart(2,'0')} · ${esc(L.name)}</span>
+      <span class="tilemeta">${esc(PALETTES.find(p=>p.id===c.palette).name)} · ${
+        esc(TYPE_SYSTEMS.find(t=>t.id===c.type).name.split(' + ')[0])}</span>
+      <span class="score"><span class="bar"><span style="width:${(c.score.total*100).toFixed(0)}%"></span></span>
+      <span class="scorenum">${(c.score.total*100).toFixed(0)}</span></span>
+    </button>`;
+  }).join('');
+  state.seen = 1;
+  bindTiles('#conceptTiles .tile', t => { state.pick = Number(t.dataset.pick); go('detail'); });
+}
+
+/* ── Detail ────────────────────────────────────────────────────────────── */
+function drawDetail(design, content){
+  const cand = state.gen && state.gen.picked[state.pick];
+  const { front, back } = facesFor(design, content);
+  const L = LAYOUTS.find(l => l.id === design.layout);
+
+  $('#detailName').textContent = L ? L.name : 'Concept';
+  $('#detailMeta').textContent = [
+    PALETTES.find(p => p.id === design.palette)?.name,
+    TYPE_SYSTEMS.find(t => t.id === design.type)?.name,
+    state.refine ? 'refined' : null
+  ].filter(Boolean).join(' · ');
+
+  const show = state.side === 'back' ? [back] : state.side === 'both' ? [front, back] : [front];
+  $('#detailCard').innerHTML = show.map(c =>
+    renderSVG(c, { guides:true }) ||
+    `<div class="deadbox"><span class="pill pill-warn">Eliminated</span>
+      <span class="tilemeta">${esc(c?.eliminated || '')}</span></div>`).join('');
+  $$('[data-side]').forEach(b => {
+    b.setAttribute('aria-pressed', String(b.dataset.side === state.side));
+    b.onclick = () => { state.side = b.dataset.side; draw(); };
+  });
+
+  if (front && !front.eliminated){
+    $('#detailKv').innerHTML = [
+      ['Trim', `${front.fmt.w} × ${front.fmt.h} mm`],
+      ['Document', `${front.fmt.w+2*front.fmt.bleed} × ${front.fmt.h+2*front.fmt.bleed} mm with bleed`],
+      ['Type', front.type.name], ['Palette', front.pal.name],
+      ['Guides', 'blue = 4 mm safe area · red = resolved slots']
+    ].map(([k,v]) => `<dt>${k}</dt><dd>${esc(v)}</dd>`).join('');
+  } else $('#detailKv').innerHTML = '';
+
+  $('#why').textContent = cand ? cand.why
+    : 'Chosen by hand from the library rather than ranked, so there is no scoring trace to explain.';
+  $('#score').innerHTML = cand ? Object.keys(W).map(k => `
+    <div class="check" style="padding:6px 0">
+      <span style="flex:1">${k.replace(/([A-Z])/g,' $1').toLowerCase()}
+        <span class="note">weighted ${W[k]}</span></span>
+      <span class="bar" style="width:78px;margin-top:6px"><span style="width:${(cand.score.parts[k]*100).toFixed(0)}%"></span></span>
+      <span class="scorenum" style="width:26px;text-align:right">${(cand.score.parts[k]*100).toFixed(0)}</span>
+    </div>`).join('') + `<div class="tally" style="margin-top:10px"><span>Total <b>${
+      (cand.score.total*100).toFixed(1)}</b> / 100</span></div>`
+    : '<p class="lede" style="font-size:12.5px">No score for a hand-picked template.</p>';
+
+  const log = state.instrLog[state.instrLog.length-1];
+  $('#instr').innerHTML = !log ? ''
+    : log.unmapped
+      ? checkRow({ s:'review', label:log.note, note:'Closest it can do: ' + log.suggestions.join(' · ') })
+      : checkRow({ s:'pass', label:'Understood as ' + log.matched.join(' + '),
+                   note:log.ops.map(o => `${o.op}(${o.arg})`).join(' · ') })
+        + (log.changes.length
+            ? log.changes.map(c => `<div class="check" style="padding:5px 0"><span class="ico"></span>
+                <span class="mono">${c.key}: ${esc(c.from)} → <b>${esc(c.to)}</b></span></div>`).join('')
+            : '<p class="lede" style="font-size:12px">Already in that state — nothing changed.</p>');
+  $('#b_undo').disabled = !state.history.length;
+}
+
+/* ── Validate ──────────────────────────────────────────────────────────── */
+function drawValidate(design, content){
+  const { front, back } = facesFor(design, content);
+  const pf = allFindings(front, back);
+  const n = s => pf.filter(f => f.s === s).length;
+  $('#pfTally').innerHTML =
+    `<span class="tally"><span><b>${n('fail')}</b> blocking</span>
+     <span><b>${n('review')}</b> advisory</span><span><b>${n('pass')}</b> pass</span></span>`;
+  $('#preflight').innerHTML = pf.map(checkRow).join('');
+
+  const tr = [...(front?.trace||[]).map(t => ({...t,f:'front'})),
+              ...(back?.trace||[]).map(t => ({...t,f:'back'}))];
+  $('#trace').innerHTML = tr.length
+    ? tr.map(t => `<div class="mono">${t.f}/${t.slot} → ${esc(t.applied.join(' → '))}${
+        t.note ? ` <span class="note">${esc(t.note)}</span>` : ''}</div>`).join('')
+    : '<p class="lede" style="font-size:12.5px">Nothing needed adjusting — the content fits every slot as authored.</p>';
+
+  if (front && !front.eliminated){
+    $('#spec').textContent = JSON.stringify({
+      format:front.fmt.id, layoutFront:front.face.id, layoutBack:design.back,
+      typeSystem:front.type.id, palette:front.pal.id, density:design.density,
+      composed_front: front.elements.filter(e => e.fit).map(e => ({
+        slot:e.ref, script:e.fit.script,
+        box:{x:+e.geom.x.toFixed(2),y:+e.geom.y.toFixed(2),w:+e.geom.w.toFixed(2),h:+e.geom.h.toFixed(2)},
+        type:{size_pt:+e.fit.sizePt.toFixed(2), lines:e.fit.lines.length},
+        ladder:e.fit.applied }))
+    }, null, 1);
+  } else $('#spec').textContent = '// eliminated — no spec produced';
+}
+
+/* ── Export ────────────────────────────────────────────────────────────── */
+function drawExport(design, content){
+  const { front, back } = facesFor(design, content);
+  const pf = allFindings(front, back);
+  const blocking = pf.filter(f => f.s === 'fail').length;
+  $('#exportMeta').textContent = blocking
+    ? `${blocking} blocking finding — export refused` : 'Preflight clean';
+
+  if (front && !front.eliminated && !blocking){
+    const files = [['card_front_print.svg', printDocSVG(front)],
+                   ['card_back_print.svg',  printDocSVG(back)]];
     if (state.finishes.includes('foil')){
-      const s = separationSVG(composedSel,'Gold foil');
-      if (s) files.push([`foil_gold.svg (plate ${s.areaPct}%)`, s.svg]);
+      const s = separationSVG(front,'Gold foil'); if (s) files.push([`foil_gold.svg — ${s.areaPct}% plate`, s.svg]);
     }
     if (state.finishes.includes('spotuv')){
-      const s = separationSVG(composedSel,'Spot UV');
-      if (s) files.push([`spot_uv.svg (plate ${s.areaPct}%)`, s.svg]);
+      const s = separationSVG(front,'Spot UV'); if (s) files.push([`spot_uv.svg — ${s.areaPct}% plate`, s.svg]);
     }
-    $('#exports').innerHTML = files.filter(f=>f[1]).map(([n,svg],i)=>
-      `<a class="chip" download="${n.split(' ')[0]}" href="data:image/svg+xml;charset=utf-8,${encodeURIComponent(svg)}">${n}</a>`).join('');
+    $('#exports').innerHTML = files.filter(f => f[1]).map(([n,x]) =>
+      `<a class="chip" download="${n.split(' ')[0]}"
+        href="data:image/svg+xml;charset=utf-8,${encodeURIComponent(x)}">${ICON.down} ${esc(n)}</a>`).join('');
   } else {
-    $('#exports').innerHTML = `<span class="badge b-fail">Export blocked — ${blocking} blocking finding${blocking===1?'':'s'}</span>`;
+    $('#exports').innerHTML = `<span class="pill pill-warn">${ICON.review} Export blocked — ${
+      blocking} blocking finding${blocking===1?'':'s'}</span>`;
   }
 
-  // ── trace + spec ──
-  const tr = [...(composedSel?.trace||[]).map(t=>({...t,f:'front'})), ...(composedBack?.trace||[]).map(t=>({...t,f:'back'}))];
-  $('#trace').innerHTML = tr.length
-    ? tr.map(t=>`<div><b>${t.f}/${t.slot}</b> → ${t.applied.join(' → ')}${t.note?` <i>(${t.note})</i>`:''}</div>`).join('')
-    : '<div>Nothing needed adjusting. Content fits every slot as authored.</div>';
+  const q = quote(Number(state.qty), state.finishes, state.zone);
+  $('#quote').innerHTML = q.lines.map(l =>
+    `<div class="check"><span style="flex:1">${esc(l.label)}</span>
+     <span class="scorenum">${taka(l.cost)}</span></div>`).join('')
+    + `<div class="check" style="border-bottom:0"><span style="flex:1"><b>Customer price</b>
+        <span class="note">${taka(q.unit)} per card · ${q.marginPct}% gross</span></span>
+       <span class="scorenum" style="font-size:14px"><b>${taka(q.retail)}</b></span></div>
+       <p class="lede" style="font-size:12px;color:var(--warn)">${esc(q.note)}</p>`;
 
-  if (composedSel && !composedSel.eliminated){
-    const comp = composedSel.elements.filter(e=>e.fit).map(e=>({
-      slot:e.ref, script:e.fit.script,
-      box:{x:+e.geom.x.toFixed(2),y:+e.geom.y.toFixed(2),w:+e.geom.w.toFixed(2),h:+e.geom.h.toFixed(2)},
-      type:{size_pt:+e.fit.sizePt.toFixed(2), track_em:+e.fit.track.toFixed(3), lines:e.fit.lines.length},
-      ladder:e.fit.applied }));
-    $('#spec').textContent = JSON.stringify({
-      format:composedSel.fmt.id, layoutFront:composedSel.face.id, layoutBack:backId,
-      typeSystem:composedSel.type.id, palette:composedSel.pal.id, density:state.density,
-      trace: selCand ? { briefVector:gen.intent.vector, candidatesConsidered:gen.stages.enumerated,
-                         survivedFit:gen.stages.composed, survivedPreflight:gen.stages.printSafe,
-                         score:selCand.score } : undefined,
-      composed_front:comp }, null, 1);
-  } else $('#spec').textContent = '// layout eliminated — no spec produced';
-
-  // ── panel visibility ──
-  $('#bulkPanel').style.display = state.mode === 'bulk' ? 'block' : 'none';
-  $('#gal').style.display       = state.mode === 'bulk' ? 'none'  : 'grid';
-
-  // ── identity: the spec hash is the design's name ──
-  if (composedSel && !composedSel.eliminated){
-    const idSpec = { format:design.format, layoutFront:design.layout, layoutBack:design.back,
-                     typeSystem:design.type, palette:design.palette, density:design.density,
-                     script:design.script, content };
-    const h = specHash(idSpec);
-    $('#identity').innerHTML = `<div class="kv">
-      <b>specHash</b><span>${h}</span>
-      <b>Versions</b><span>${state.history.length + 1}</span>
-      <b>Renders</b><span>cacheable at renders/${h.slice(0,8)}/…</span></div>
-      <p class="note">Identity is the content. The same design always hashes the same, so a render is cached forever and support can reproduce exactly what a customer saw.</p>`;
-  } else $('#identity').innerHTML = '<p class="note">No spec.</p>';
-
-  // ── bulk results ──
-  if (state.mode === 'bulk' && state.bulk){
-    const B = state.bulk;
-    const bad = B.rows.filter(r=>!r.ok);
-    $('#bulkOut').innerHTML =
-      `<p class="note" style="margin-bottom:10px"><b>${B.ok} of ${B.total} rows composed.</b>${bad.length? ` ${bad.length} eliminated — those people need a different layout, and the system says so rather than printing them wrong.`:''}</p>`
-      + `<div class="gal">` + B.rows.slice(0, 24).map(r => {
-          const svg = r.ok ? renderSVG(r.composed) : null;
-          const pf = r.ok ? preflight(r.composed) : [];
-          const blocking = pf.filter(f=>f.s==='fail').length;
-          const adv = pf.filter(f=>f.s==='review').length;
-          return `<div class="tile" style="cursor:default">
-            ${svg || `<div style="aspect-ratio:${89/51};display:flex;align-items:center;justify-content:center;background:#fff;border:1px dashed var(--divider);color:var(--accent);font-size:10px;text-align:center;padding:10px">ELIMINATED<br>${r.eliminated||''}</div>`}
-            <h3>${String(r.index).padStart(3,'0')} · ${r.name || '(no name)'}</h3>
-            <div class="m">${r.ok ? `${blocking} blocking · ${adv} advisory` : 'not printable in this layout'}</div>
-          </div>`;
-        }).join('') + `</div>`
-      + (B.total > 24 ? `<p class="note">Showing the first 24 of ${B.total}.</p>` : '');
-  } else if (state.mode === 'bulk') {
-    $('#bulkOut').innerHTML = '<p class="note">Paste a CSV and press Generate all.</p>';
+  if (front && !front.eliminated){
+    const h = specHash({ format:design.format, layoutFront:design.layout, layoutBack:design.back,
+      typeSystem:design.type, palette:design.palette, density:design.density,
+      script:design.script, content });
+    $('#identity').innerHTML = [['specHash', h], ['Versions', String(state.history.length+1)],
+      ['Renders', `cacheable at renders/${h.slice(0,8)}/…`]]
+      .map(([k,v]) => `<dt>${k}</dt><dd>${esc(v)}</dd>`).join('');
   }
 }
 
-function composeForced(layoutId, content, forceScript, over){
-  const L = LAYOUTS.find(l=>l.id===layoutId);
-  const i = LAYOUTS.indexOf(L);
-  if (forceScript) LAYOUTS[i] = { ...L, forceScript };
-  const c = compose(Object.assign(specFor(layoutId, content), over||{}));
-  LAYOUTS[i] = L;
-  return c;
+/* ── Library ───────────────────────────────────────────────────────────── */
+function drawLibrary(content){
+  const fs = (state.script === 'bangla' || state.script === 'bangla-only') ? 'bangla' : null;
+  const fronts = LAYOUTS.filter(l => l.face === 'front');
+  let live = 0;
+  $('#libTiles').innerHTML = fronts.map(L => {
+    const c = composeForced(L.id, content, fs);
+    const s = renderSVG(c); if (s) live++;
+    return `<button class="tile ${s?'':'dead'}" role="button" tabindex="0"
+      aria-pressed="${L.id===state.layout}" data-lay="${L.id}" ${s?'':'disabled'}>
+      ${s || `<div class="deadbox"><span class="pill pill-warn">Eliminated</span>
+        <span class="tilemeta">${esc(c.eliminated||'')}</span></div>`}
+      <span class="tiletitle">${esc(L.name)}</span>
+      <span class="tilemeta">${esc(L.family)} · ${
+        s ? (c.trace.length ? c.trace.length + ' fit adjustment(s)' : 'fits as authored') : 'cannot hold this content'}</span>
+    </button>`;
+  }).join('');
+  $('#libMeta').textContent = `${live} of ${fronts.length} can hold this content at ${
+    FORMATS.find(f=>f.id===state.format).name}`;
+  bindTiles('#libTiles .tile', t => {
+    if (!t.dataset.lay) return;
+    state.layout = t.dataset.lay; state.refine = null; go('detail');
+  });
 }
 
-/* ── wire up ── */
+/* ── Bulk ──────────────────────────────────────────────────────────────── */
+function drawBulk(design, content){
+  const { front } = facesFor(design, content);
+  $('#bulkTemplate').innerHTML = renderSVG(front) || '<div class="deadbox"><span class="pill pill-warn">Eliminated</span></div>';
+  const B = state.bulk;
+  if (!B){ $('#bulkOut').innerHTML = ''; $('#bulkTiles').innerHTML = ''; $('#bulkMeta').textContent = ''; return; }
+  const bad = B.rows.filter(r => !r.ok).length;
+  $('#bulkMeta').textContent = `${B.ok} of ${B.total} rows composed`;
+  $('#bulkOut').innerHTML = `<div class="tally" style="margin-top:14px">
+    <span><b>${B.ok}</b> composed</span><span><b>${bad}</b> eliminated</span></div>
+    ${bad ? `<p class="lede" style="font-size:12.5px">Those people need a different layout, and the system says so rather than printing them wrong.</p>` : ''}`;
+  $('#bulkTiles').innerHTML = B.rows.slice(0,24).map(r => {
+    const s = r.ok ? renderSVG(r.composed) : null;
+    const pf = r.ok ? preflight(r.composed) : [];
+    return `<div class="tile" style="cursor:default">
+      ${s || `<div class="deadbox"><span class="pill pill-warn">Eliminated</span>
+        <span class="tilemeta">${esc(r.eliminated||'')}</span></div>`}
+      <span class="tiletitle">${String(r.index).padStart(3,'0')} · ${esc(r.name||'(no name)')}</span>
+      <span class="tilemeta">${r.ok
+        ? `${pf.filter(f=>f.s==='fail').length} blocking · ${pf.filter(f=>f.s==='review').length} advisory`
+        : 'not printable in this layout'}</span></div>`;
+  }).join('') + (B.total > 24 ? '' : '');
+}
+
+/* ══════════════════════════ WIRING ══════════════════════════ */
 function init(){
-  $('#presets').innerHTML = PRESETS.map((p,i)=>`<button class="chip" data-p="${i}" aria-pressed="${i===0}" title="${p.why}">${p.k}</button>`).join('');
-  $('#i_industry').innerHTML = Object.entries(INDUSTRIES).map(([k,v])=>`<option value="${k}">${v.label}</option>`).join('');
-  $('#i_personality').innerHTML = AXES.map(a=>`<button class="chip" data-ax="${a}" aria-pressed="${state.personality.includes(a)}">${AXIS_WORD[a]}</button>`).join('');
-  $('#i_finishes').innerHTML = Object.entries(FINISH_COST).map(([k,v])=>`<button class="chip" data-fin="${k}" aria-pressed="${state.finishes.includes(k)}">${v.label}</button>`).join('');
-  $('#i_format').innerHTML = FORMATS.map(f=>`<option value="${f.id}">${f.name}</option>`).join('');
-  $('#i_type').innerHTML   = TYPE_SYSTEMS.map(t=>`<option value="${t.id}">${t.name}</option>`).join('');
-  $('#i_pal').innerHTML    = PALETTES.map(p=>`<option value="${p.id}">${p.name}</option>`).join('');
-  $('#i_back').innerHTML   = LAYOUTS.filter(l=>l.face==='back').map(l=>`<option value="${l.id}">${l.name}</option>`).join('');
-  $('#i_pal').value = state.palette; $('#i_back').value = state.back; $('#i_industry').value = state.industry;
-
+  $('#i_industry').innerHTML = Object.entries(INDUSTRIES).map(([k,v]) => `<option value="${k}">${v.label}</option>`).join('');
+  $('#i_format').innerHTML   = FORMATS.map(f => `<option value="${f.id}">${f.name}</option>`).join('');
+  $('#i_back').innerHTML     = LAYOUTS.filter(l => l.face === 'back').map(l => `<option value="${l.id}">${l.name}</option>`).join('');
+  $('#i_personality').innerHTML = AXES.map(a =>
+    `<button class="chip" data-ax="${a}" aria-pressed="${state.personality.includes(a)}">${AXIS_WORD[a]}</button>`).join('');
+  $('#i_finishes').innerHTML = Object.entries(FINISH_COST).map(([k,v]) =>
+    `<button class="chip" data-fin="${k}" aria-pressed="${state.finishes.includes(k)}">${v.label}</button>`).join('');
+  $('#presets').innerHTML = PRESETS.map((p,i) =>
+    `<button class="chip chip-sm" data-p="${i}" aria-pressed="${i===0}" title="${esc(p.why)}">${esc(p.k)}</button>`).join('');
+  $('#i_industry').value = state.industry; $('#i_back').value = state.back;
+  $('#logoReport').innerHTML = '<p class="lede">No logo yet. A monogram will be generated from the company name, which is what most cards here use anyway.</p>';
   writeForm(PRESETS[0].c);
 
   $('#presets').onclick = e => {
-    const b = e.target.closest('[data-p]'); if(!b) return;
-    state.preset = +b.dataset.p; state.pick = 0;
-    $('#presets').querySelectorAll('.chip').forEach(x=>x.setAttribute('aria-pressed', x===b));
-    // each preset carries its natural industry
-    state.industry = ['doctor','rmg','shop','advocate','tutor','rmg'][state.preset];
+    const b = e.target.closest('[data-p]'); if (!b) return;
+    const i = Number(b.dataset.p);
+    $$('#presets .chip').forEach(x => x.setAttribute('aria-pressed', String(x === b)));
+    state.industry = ['doctor','rmg','shop','advocate','tutor','rmg'][i];
     $('#i_industry').value = state.industry;
-    writeForm(PRESETS[state.preset].c); draw();
+    writeForm(PRESETS[i].c); draw();
   };
   $('#i_personality').onclick = e => {
-    const b = e.target.closest('[data-ax]'); if(!b) return;
+    const b = e.target.closest('[data-ax]'); if (!b) return;
     const a = b.dataset.ax, i = state.personality.indexOf(a);
     if (i >= 0) state.personality.splice(i,1);
     else { if (state.personality.length >= 3) state.personality.shift(); state.personality.push(a); }
-    $('#i_personality').querySelectorAll('.chip').forEach(x=>x.setAttribute('aria-pressed', state.personality.includes(x.dataset.ax)));
-    state.pick = 0; draw();
+    $$('#i_personality .chip').forEach(x => x.setAttribute('aria-pressed', String(state.personality.includes(x.dataset.ax))));
+    draw();
   };
   $('#i_finishes').onclick = e => {
-    const b = e.target.closest('[data-fin]'); if(!b) return;
+    const b = e.target.closest('[data-fin]'); if (!b) return;
     const f = b.dataset.fin, i = state.finishes.indexOf(f);
     i >= 0 ? state.finishes.splice(i,1) : state.finishes.push(f);
-    $('#i_finishes').querySelectorAll('.chip').forEach(x=>x.setAttribute('aria-pressed', state.finishes.includes(x.dataset.fin)));
+    $$('#i_finishes .chip').forEach(x => x.setAttribute('aria-pressed', String(state.finishes.includes(x.dataset.fin))));
     draw();
   };
-  document.querySelectorAll('[data-mode]').forEach(t => t.onclick = () => {
-    state.mode = t.dataset.mode;
-    document.querySelectorAll('[data-mode]').forEach(x=>x.setAttribute('aria-pressed', x===t));
-    draw();
-  });
-  document.querySelectorAll('.tab[data-side]').forEach(t => t.onclick = () => {
-    state.side = t.dataset.side;
-    document.querySelectorAll('.tab[data-side]').forEach(x=>x.setAttribute('aria-pressed', x===t));
-    draw();
-  });
-  const MAP = {i_format:'format',i_type:'type',i_pal:'palette',i_density:'density',
-               i_back:'back',i_script:'script',i_industry:'industry',i_qty:'qty',i_zone:'zone'};
-  Object.keys(MAP).forEach(id=>{
-    $('#'+id).oninput = e => { state[MAP[id]] = e.target.value; state.pick = 0; draw(); };
-  });
+
+  $('#b_next').onclick = () => { if (state.step === 6) runGenerate(); else { state.step++; draw(); } };
+  $('#b_prev').onclick = () => { state.step = Math.max(0, state.step-1); draw(); };
+  $('#b_regen').onclick = () => runGenerate();
+  $('#b_tolibrary').onclick = () => go('library');
+  $('#b_toconcepts').onclick = () => go('concepts');
+  $('#b_validate').onclick = () => go('validate');
+  $('#b_toexport').onclick = () => go('export');
+  $('#b_backdetail').onclick = () => go('detail');
+  $('#b_backdetail2').onclick = () => go('detail');
+
+  const MAP = { i_format:'format', i_density:'density', i_back:'back', i_script:'script',
+                i_industry:'industry', i_qty:'qty', i_zone:'zone' };
+  Object.keys(MAP).forEach(id => { $('#'+id).oninput = e => { state[MAP[id]] = e.target.value; draw(); }; });
+  ['i_name','i_role','i_company','i_quals','i_bname','i_brole','i_bcompany',
+   'i_p1','i_p2','i_email','i_web','i_addr'].forEach(id => { $('#'+id).oninput = draw; });
+
+  /* Refinement */
   const applyInstr = () => {
-    const txt = $('#i_instr').value;
-    const cls = classifyInstruction(txt);
+    const cls = classifyInstruction($('#i_instr').value);
     if (cls.empty) return;
-    if (cls.unmapped){ state.instrLog.push({...cls, changes:[]}); draw(); return; }
-    const sel = lastDesign || null;
-    if (!sel) return;
-    const { design:nd, changes } = applyOps(sel, cls.ops);
-    state.history.push(state.refine ? { ...state.refine } : { ...sel });
-    state.refine = nd;
-    state.instrLog.push({ ...cls, changes });
+    if (cls.unmapped){ state.instrLog.push({ ...cls, changes:[] }); draw(); return; }
+    const { design:nd, changes } = applyOps(lastDesign, cls.ops);
+    state.history.push({ ...lastDesign });
+    state.refine = nd; state.instrLog.push({ ...cls, changes });
     draw();
   };
   $('#b_apply').onclick = applyInstr;
+  $('#i_instr').onkeydown = e => { if (e.key === 'Enter') applyInstr(); };
+  $('#b_undo').onclick = () => { if (!state.history.length) return; state.refine = state.history.pop(); state.instrLog.pop(); draw(); };
+  $('#b_reset').onclick = () => { state.refine = null; state.history = []; state.instrLog = []; $('#i_instr').value = ''; draw(); };
 
-  /* Save → the spec goes to the database, we get a short code back, and the
-     QR is recomposed to carry the link that now resolves. */
-  $('#b_save').onclick = async () => {
-    const btn = $('#b_save'); btn.disabled = true;
-    $('#saveOut').innerHTML = '<p class="note">Saving…</p>';
-    try {
-      const snap = snapshot(); delete snap.pick; delete snap.mode;
-      const res = await fetch('/api/designs', { method:'POST',
-        headers:{'content-type':'application/json'},
-        body: JSON.stringify({ spec: snap, label: (readForm().name || '').slice(0,80) }) });
-      const j = await res.json();
-      if (!res.ok) throw new Error(j.error || ('HTTP ' + res.status));
-      state.shareCode = j.code;
-      $('#saveOut').innerHTML = `<div class="chk"><span class="dot d-pass"></span><span>Saved
-        <span class="note"><a href="${j.url}" target="_blank" rel="noopener">${j.url}</a> — the QR now resolves to this card.</span></span></div>`;
-      draw();
-    } catch (err){
-      $('#saveOut').innerHTML = `<div class="chk"><span class="dot d-fail"></span><span>Could not save
-        <span class="note">${err.message}. The engine works offline; only sharing needs the server.</span></span></div>`;
-    } finally { btn.disabled = false; }
-  };
-  $('#b_undo').onclick = () => {
-    if (!state.history.length) return;
-    state.refine = state.history.pop();
-    state.instrLog.pop();
-    draw();
-  };
-
-  // ── logo upload: the gate is here, not at export ──
-  $('#i_logo').onchange = async (e) => {
+  /* Logo — graded at upload */
+  $('#i_logo').onchange = async e => {
     const f = e.target.files && e.target.files[0];
     if (!f){ state.logo = null; draw(); return; }
-    $('#logoReport').innerHTML = '<p class="note">Reading…</p>';
+    $('#logoReport').innerHTML = '<p class="lede">Reading…</p>';
     try {
       const a = await inspectLogo(f);
-      // graded against the size it will actually be placed at
-      const placedMm = 1.4 * (FORMATS.find(x=>x.id===state.format).w / GRID.cols);
+      const placedMm = 1.4 * (FORMATS.find(x => x.id === state.format).w / GRID.cols);
       const g = gradeLogo(a, placedMm);
       state.logo = g.ok ? { ...a, ok:true } : null;
-      $('#logoReport').innerHTML =
-        g.findings.map(f2=>`<div class="chk"><span class="dot d-${f2.s}"></span><span>${f2.label}${f2.note?`<span class="note">${f2.note}</span>`:''}</span></div>`).join('')
-        + (g.ok ? '<p class="note">Accepted — it will be placed in the mark slot.</p>'
-                : `<p class="note" style="color:var(--accent)">Rejected. Options: ${g.options.join(' · ')}</p>`);
+      $('#logoReport').innerHTML = g.findings.map(checkRow).join('')
+        + (g.ok ? '<p class="lede" style="font-size:12.5px">Accepted. It will be placed in the mark slot.</p>'
+                : `<p class="lede" style="font-size:12.5px;color:var(--color-accent)">Rejected. ${esc(g.options.join(' · '))}</p>`);
     } catch (err){
       state.logo = null;
-      $('#logoReport').innerHTML = `<div class="chk"><span class="dot d-fail"></span><span>${err.message}</span></div>`;
+      $('#logoReport').innerHTML = checkRow({ s:'fail', label:err.message });
     }
     draw();
   };
 
-  // ── bulk ──
-  const SAMPLE_CSV = [
-    'name,role,company,phone,email',
+  /* Bulk */
+  const SAMPLE = ['name,role,company,phone,email',
     'Sharmin Akter,Senior Merchandiser,Zenith Sourcing Ltd.,01755-889900,sharmin@zenithsourcing.com',
     'Md. Rakibul Hasan,Merchandiser,Zenith Sourcing Ltd.,01711-224466,rakib@zenithsourcing.com',
     'Farhana Islam,Quality Controller,Zenith Sourcing Ltd.,01911-335577,farhana@zenithsourcing.com',
     'Mohammad Shafiqur Rahman Chowdhury Bhuiyan,Deputy General Manager Corporate Affairs,Zenith Sourcing Ltd.,01611-778899,shafiqur@zenithsourcing.com',
-    'Tanvir Ahmed,Sample Coordinator,Zenith Sourcing Ltd.,01511-990011,tanvir@zenithsourcing.com'
-  ].join('\n');
-  $('#b_bulk_sample').onclick = () => { $('#i_csv').value = SAMPLE_CSV; };
+    'Tanvir Ahmed,Sample Coordinator,Zenith Sourcing Ltd.,01511-990011,tanvir@zenithsourcing.com'].join('\n');
+  $('#b_bulk_sample').onclick = () => { $('#i_csv').value = SAMPLE; };
   $('#b_bulk').onclick = () => {
     const { rows } = parseCSV($('#i_csv').value);
-    if (!rows.length){ $('#bulkOut').innerHTML = '<p class="note" style="color:var(--accent)">No data rows found.</p>'; return; }
-    const d = lastDesign;
-    state.bulk = bulkGenerate(d, rows, readForm(),
-      (design, content) => composeForced(design.layout, content,
-        design.script === 'bangla' ? 'bangla' : null,
-        { palette:design.palette, type:design.type, density:design.density, format:design.format }));
+    if (!rows.length){ $('#bulkOut').innerHTML = checkRow({ s:'fail', label:'No data rows found in that CSV' }); return; }
+    state.bulk = bulkGenerate(lastDesign, rows, readForm(), (d, c) =>
+      composeForced(d.layout, c, d.script === 'bangla' ? 'bangla' : null,
+        { palette:d.palette, type:d.type, density:d.density, format:d.format }));
     draw();
   };
-  $('#i_instr').onkeydown = e => { if (e.key === 'Enter') applyInstr(); };
-  $('#b_reset').onclick = () => { state.refine = null; state.instrLog = []; state.history = []; $('#i_instr').value=''; draw(); };
-  document.querySelectorAll('.col input').forEach(i => { if (i.id !== 'i_instr') i.oninput = draw; });
 
-  /* Session state lives in the URL so a design is shareable by link, and in
-     localStorage so a refresh does not lose work. Neither is a backend —
-     they are the smallest honest stand-in for §8 persistence, and they make
-     the harness usable rather than a toy. */
-  /* eslint-disable no-var */
-  const SAVE_KEYS = ['mode','format','type','palette','density','back','script',
+  /* Save and share */
+  $('#b_save').onclick = async () => {
+    const btn = $('#b_save'); btn.disabled = true;
+    $('#saveOut').innerHTML = '<p class="lede">Saving…</p>';
+    try {
+      const snap = snapshot(); delete snap.pick; delete snap.screen;
+      const res = await fetch('/api/designs', { method:'POST',
+        headers:{'content-type':'application/json'},
+        body: JSON.stringify({ spec:snap, label:(readForm().name||'').slice(0,80) }) });
+      const j = await res.json();
+      if (!res.ok) throw new Error(j.error || ('HTTP ' + res.status));
+      state.shareCode = j.code;
+      $('#saveOut').innerHTML = checkRow({ s:'pass', label:'Saved',
+        note:`${j.url} — the QR now resolves to this card.` });
+      draw();
+    } catch (err){
+      $('#saveOut').innerHTML = checkRow({ s:'fail', label:'Could not save',
+        note:`${err.message}. The engine works offline; only sharing needs the server.` });
+    } finally { btn.disabled = false; }
+  };
+
+  /* Persistence — URL hash for sharing, localStorage to survive a refresh. */
+  const SAVE_KEYS = ['screen','step','format','type','palette','density','back','script',
                      'industry','personality','finishes','qty','zone','layout','pick','refine'];
-  const snapshot = () => {
+  var snapshot = () => {
     const o = {}; for (const k of SAVE_KEYS) o[k] = state[k];
-    o.content = readForm(); delete o.content.logo;      // never put an asset in a URL
+    o.content = readForm(); delete o.content.logo;
     return o;
   };
-  const restore = (o) => {
+  const restore = o => {
     if (!o || typeof o !== 'object') return false;
     for (const k of SAVE_KEYS) if (k in o) state[k] = o[k];
     if (o.content) writeForm(o.content);
-    for (const [id,k] of Object.entries({i_format:'format',i_type:'type',i_pal:'palette',
-        i_density:'density',i_back:'back',i_script:'script',i_industry:'industry',
-        i_qty:'qty',i_zone:'zone'})) { const el = $('#'+id); if (el) el.value = state[k]; }
-    $('#i_personality').querySelectorAll('.chip').forEach(x=>x.setAttribute('aria-pressed', state.personality.includes(x.dataset.ax)));
-    $('#i_finishes').querySelectorAll('.chip').forEach(x=>x.setAttribute('aria-pressed', state.finishes.includes(x.dataset.fin)));
-    document.querySelectorAll('[data-mode]').forEach(x=>x.setAttribute('aria-pressed', x.dataset.mode===state.mode));
+    for (const [id,k] of Object.entries({ i_format:'format', i_density:'density', i_back:'back',
+        i_script:'script', i_industry:'industry', i_qty:'qty', i_zone:'zone' })){
+      const el = $('#'+id); if (el) el.value = state[k];
+    }
+    $$('#i_personality .chip').forEach(x => x.setAttribute('aria-pressed', String(state.personality.includes(x.dataset.ax))));
+    $$('#i_finishes .chip').forEach(x => x.setAttribute('aria-pressed', String(state.finishes.includes(x.dataset.fin))));
+    if (state.screen !== 'brief' && !state.gen) state.screen = 'brief';
     return true;
   };
   const persist = () => {
@@ -2450,13 +3000,11 @@ function init(){
       const json = JSON.stringify(snapshot());
       localStorage.setItem('cardworks.session', json);
       history.replaceState(null, '', '#d=' + encodeURIComponent(btoa(unescape(encodeURIComponent(json)))));
-    } catch(e){ /* private mode, quota, or a huge payload — never block the UI */ }
+    } catch(e){ /* private mode or quota — never block the UI */ }
   };
   const _draw = draw;
   draw = function(){ _draw(); persist(); };
 
-  let loaded = false;
-  // ?c=CODE — open a saved card straight from a link
   const cparam = new URLSearchParams(location.search || '').get('c');
   if (cparam && /^[0-9a-f]{6,16}$/.test(cparam)){
     fetch('/api/designs?code=' + encodeURIComponent(cparam))
@@ -2464,14 +3012,16 @@ function init(){
       .then(j => { state.shareCode = j.code; if (restore(j.spec)) draw(); })
       .catch(() => {});
   }
+  let loaded = false;
   const hash = /^#d=(.+)$/.exec(location.hash || '');
-  if (hash){ try { loaded = restore(JSON.parse(decodeURIComponent(escape(atob(decodeURIComponent(hash[1]))))) ); } catch(e){} }
+  if (hash){ try { loaded = restore(JSON.parse(decodeURIComponent(escape(atob(decodeURIComponent(hash[1])))))); } catch(e){} }
   if (!loaded){ try { loaded = restore(JSON.parse(localStorage.getItem('cardworks.session'))); } catch(e){} }
 
-  (document.fonts?.ready || Promise.resolve()).then(()=>{ _mcache.clear(); draw(); });
+  (document.fonts?.ready || Promise.resolve()).then(() => { _mcache.clear(); draw(); });
   draw();
 }
 init();
+
 </script>
 </body>
 </html>
