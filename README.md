@@ -1,5 +1,8 @@
 # CARDWORKS — Bangladesh
 
+**Live: https://cardworks-bd.netlify.app**
+A scanned card resolves at `/c/<code>` — e.g. https://cardworks-bd.netlify.app/c/f08e40a3
+
 Three files.
 
 | File | What it is |
@@ -68,27 +71,24 @@ The site is a static `index.html` plus two Netlify Functions backed by Neon Post
 npm run db:schema
 ```
 
-### Netlify setup (one-time, needs your login)
+### Already deployed
+
+Site `cardworks-bd` is live and linked, and `DATABASE_URL` is set as a secret
+environment variable for the production and deploy-preview contexts. To ship a
+change:
 
 ```bash
-netlify login
-netlify init
-```
-
-Choose *Connect to an existing GitHub repository* and pick
-`jmmohiuddin/visiting-card-generator-system-`. Netlify reads `netlify.toml`,
-so build settings are already correct: publish `.`, functions in
-`netlify/functions`, and `npm test` runs on every build — a failing assertion
-fails the deploy.
-
-Then set the one secret:
-
-```bash
-netlify env:set DATABASE_URL "postgresql://…"   # the Neon pooled connection string
 netlify deploy --build --prod
 ```
 
-After that, every push to `main` deploys automatically.
+`netlify.toml` runs `npm test` as the build command, so a failing assertion
+fails the deploy rather than shipping a broken card.
+
+**Optional — continuous deployment.** The site was created from the CLI, so it
+is not yet linked to GitHub. To make every push to `main` deploy automatically,
+open the site in Netlify → *Project configuration → Build & deploy → Link
+repository*, and pick `jmmohiuddin/visiting-card-generator-system-`. That step
+needs GitHub authorisation, so it has to be done from the browser.
 
 ### Local development
 

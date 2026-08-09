@@ -34,17 +34,22 @@ const page = (title, body) => `<!doctype html>
 <style>
 :root{color-scheme:light dark}
 *{margin:0;padding:0;box-sizing:border-box}
+html,body{max-width:100%;overflow-x:hidden}
 body{font:16px/1.5 -apple-system,BlinkMacSystemFont,"Segoe UI",system-ui,sans-serif;
-     background:#f3f2f2;color:#201e1d;display:flex;justify-content:center;padding:24px}
+     background:#f3f2f2;color:#201e1d;padding:24px 16px}
 @media(prefers-color-scheme:dark){body{background:#161514;color:#ece9e6}.card{background:#201e1d!important;border-color:#3a3634!important}}
-.card{width:100%;max-width:420px;background:#fff;border:1px solid #d8d5d2;padding:28px 24px}
+/* A flex item will not shrink below its content unless min-width is cleared,
+   which is how a 420px card overflows a 390px phone. This page is reached by
+   scanning a QR — it is a phone page first, so it is laid out as one. */
+.card{width:100%;max-width:420px;min-width:0;margin:0 auto;background:#fff;
+      border:1px solid #d8d5d2;padding:28px 22px}
 h1{font-size:22px;font-weight:700;letter-spacing:-.01em;margin-bottom:2px}
 .role{color:#6f6b68;font-size:14px}
 .org{margin-top:2px;font-size:12px;letter-spacing:.16em;text-transform:uppercase;color:#c1121f}
 hr{border:0;border-top:1px solid #d8d5d2;margin:18px 0}
 a{color:inherit}
 .row{display:flex;gap:10px;padding:7px 0;font-size:14px;word-break:break-word}
-.k{flex:0 0 68px;font-size:11px;letter-spacing:.1em;text-transform:uppercase;color:#6f6b68;padding-top:3px}
+.k{flex:0 0 62px;font-size:11px;letter-spacing:.1em;text-transform:uppercase;color:#6f6b68;padding-top:3px}
 .btn{display:block;margin-top:18px;padding:13px;text-align:center;background:#201e1d;color:#fff;
      text-decoration:none;font-weight:600;font-size:14px}
 .foot{margin-top:16px;font-size:11px;color:#6f6b68;text-align:center}
