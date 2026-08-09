@@ -55,3 +55,62 @@ Run the tests: `node cardworks-engine.test.cjs` — **162 assertions**, includin
 1. **The cost numbers are placeholders.** Get real quotes from two or three Dhaka presses and replace `PRESS_BASE` and `FINISH_COST`. Ask each press for its colour profile, plate/block setup cost, minimum run, lead time, and whether it will accept a PDF/X-4 without "fixing" it first — that last answer matters more than the price.
 2. **Print-test Bangla conjuncts at 7.5 pt** on the actual 300 gsm stock before trusting the floor. The value is reasoned from how conjuncts stack, not measured on a Dhaka press. If they collapse, raise it — the number is one constant in `SCRIPTS.bangla.minPt`.
 3. **Scan-test a printed QR.** The encoder is verified mathematically (every block is a valid RS codeword) and structurally, but it has not been photographed off paper. Print one at 0.5 mm modules and scan it with a cheap Android phone before trusting `MIN_MODULE`. That constant is deliberately conservative and may be loosened per press.
+
+---
+
+## Deploying
+
+The site is a static `index.html` plus two Netlify Functions backed by Neon Postgres.
+
+**The database schema is already applied.** To re-apply after a change:
+
+```bash
+npm run db:schema
+```
+
+### Netlify setup (one-time, needs your login)
+
+```bash
+netlify login
+netlify init
+```
+
+Choose *Connect to an existing GitHub repository* and pick
+`jmmohiuddin/visiting-card-generator-system-`. Netlify reads `netlify.toml`,
+so build settings are already correct: publish `.`, functions in
+`netlify/functions`, and `npm test` runs on every build — a failing assertion
+fails the deploy.
+
+Then set the one secret:
+
+```bash
+netlify env:set DATABASE_URL "postgresql://…"   # the Neon pooled connection string
+netlify deploy --build --prod
+```
+
+After that, every push to `main` deploys automatically.
+
+### Local development
+
+```bash
+cp .env.example .env    # add your DATABASE_URL
+netlify dev             # http://localhost:8888
+```
+
+### Endpoints
+
+| Route | Purpose |
+|---|---|
+| `/` | The engine |
+| `/?c=CODE` | Open a saved design |
+| `POST /api/designs` | Save a spec, get a short code (idempotent — same design, same code) |
+| `GET /api/designs?code=…` | Load a spec |
+| `/c/CODE` | Where a scanned QR lands: card page + *Save to contacts* |
+| `/c/CODE?vcf` | vCard download |
+
+### A note on secrets
+
+`DATABASE_URL` is **only** ever a Netlify environment variable and a local
+`.env` (gitignored). It is not in this repository and must not be added to it.
+If it is ever pasted into a chat, an issue, or a commit, rotate it in the Neon
+console immediately.
