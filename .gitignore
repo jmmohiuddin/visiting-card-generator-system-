@@ -1,0 +1,7 @@
+# Secrets — never commit. The Neon connection string lives in Netlify env vars.
+.env
+.env.*
+!.env.example
+.netlify/
+node_modules/
+.DS_Store

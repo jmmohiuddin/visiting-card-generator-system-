@@ -1,0 +1,15 @@
+{
+  "name": "cardworks",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "CARDWORKS — a constraint-based visiting card engine for Bangladesh",
+  "scripts": {
+    "test": "node cardworks-engine.test.cjs",
+    "dev": "netlify dev",
+    "db:schema": "psql \"$DATABASE_URL\" -v ON_ERROR_STOP=1 -f db/schema.sql"
+  },
+  "dependencies": {
+    "@neondatabase/serverless": "^0.10.4"
+  }
+}

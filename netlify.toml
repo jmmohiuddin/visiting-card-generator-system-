@@ -1,0 +1,20 @@
+[build]
+  publish = "."
+  functions = "netlify/functions"
+  command = "npm run test"
+
+[functions]
+  node_bundler = "esbuild"
+
+# The short-link the QR fallback encodes. A scanned card lands here.
+[[redirects]]
+  from = "/c/*"
+  to = "/.netlify/functions/card"
+  status = 200
+
+[[headers]]
+  for = "/*"
+  [headers.values]
+    X-Content-Type-Options = "nosniff"
+    Referrer-Policy = "strict-origin-when-cross-origin"
+    X-Frame-Options = "SAMEORIGIN"
