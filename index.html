@@ -265,6 +265,21 @@ input[type=file].input{padding:8px;font-size:12px}
     transition-duration:.001ms!important}
 }
 
+.stagebar{display:flex;border-bottom:var(--rule);overflow-x:auto;scrollbar-width:none}
+.stagebar::-webkit-scrollbar{display:none}
+.stagebar button{display:flex;gap:9px;align-items:center;white-space:nowrap;padding:11px 18px;
+  border:0;border-right:1px solid var(--hair);background:transparent;cursor:pointer;
+  font-family:var(--font-body);font-size:13px;color:var(--color-text);transition:background .14s ease}
+.stagebar button:hover:not(:disabled){background:color-mix(in srgb,var(--color-text) 7%,transparent)}
+.stagebar button[aria-current="step"]{background:var(--color-accent);color:var(--color-bg)}
+.stagebar button[aria-current="step"] .railnum{color:var(--color-bg)}
+.stagebar button:disabled{color:var(--faint);cursor:not-allowed}
+.stagebar button:disabled .railnum{color:var(--faint)}
+.cmp{display:grid;grid-template-columns:repeat(3,1fr);border-top:1px solid var(--hair)}
+@media(max-width:1100px){.cmp{grid-template-columns:repeat(2,1fr)}}
+@media(max-width:680px){.cmp{grid-template-columns:1fr}}
+.cmp > div{padding:var(--space-6);border-right:1px solid var(--hair);border-bottom:1px solid var(--hair)}
+.cmp > div:nth-child(3n){border-right:0}
 .sr{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap}
 .empty{padding:var(--space-8) var(--space-6);color:var(--muted);font-size:14px;max-width:56ch}
 .pill{display:inline-flex;align-items:center;gap:6px;font-size:10.5px;letter-spacing:.11em;
@@ -285,6 +300,8 @@ input[type=file].input{padding:8px;font-size:12px}
   <span class="crumb" id="crumb">Brief</span>
   <div class="navlinks" id="navlinks"></div>
 </nav>
+
+<div id="stagebar" class="stagebar"></div>
 
 <main id="main">
 
@@ -465,11 +482,17 @@ input[type=file].input{padding:8px;font-size:12px}
       <span class="micro" id="conceptsMeta"></span>
     </div>
     <div class="row">
+      <div class="seg" role="group" aria-labelledby="lbl_view">
+        <span class="sr" id="lbl_view">How to view the concepts</span>
+        <button data-view="grid" aria-pressed="true">Grid</button>
+        <button data-view="compare" aria-pressed="false">Compare</button>
+      </div>
       <button class="btn" id="b_regen">Re-compose</button>
       <button class="btn" id="b_tolibrary">Browse all layouts</button>
     </div>
   </div>
   <div class="tiles" id="conceptTiles"></div>
+  <div id="compareView"></div>
 </section>
 
 <!-- ══════════════════ DETAIL ══════════════════ -->
@@ -502,25 +525,50 @@ input[type=file].input{padding:8px;font-size:12px}
       <div id="score"></div>
     </div>
     <hr class="hair">
-    <div>
-      <h6 style="margin-bottom:8px">Change it</h6>
-      <div class="field"><label class="sr" for="i_instr">Instruction</label>
-        <input class="input" id="i_instr" placeholder="Make it more premium · নাম বড় করুন"></div>
-      <div class="row" style="margin-top:10px">
-        <button class="btn btn-primary" id="b_apply">Apply</button>
-        <button class="btn" id="b_undo">Undo</button>
-        <button class="btn btn-ghost" id="b_reset">Reset</button>
-      </div>
-      <div id="instr" style="margin-top:12px"></div>
-      <p class="lede" style="font-size:12px">Free text resolves to operations from a closed set. An instruction can never move an element or set a size; the geometry is always re-composed.</p>
-    </div>
-    <hr class="hair">
     <div class="row">
+      <button class="btn btn-primary" id="b_tocustomise">Customise</button>
       <button class="btn" id="b_validate">Validate</button>
-      <button class="btn btn-primary" id="b_toexport">Export or order</button>
+      <button class="btn" id="b_toexport">Export or order</button>
+    </div>
     </div>
   </div>
  </div>
+</section>
+
+<!-- ══════════════════ 10 · CUSTOMISE ══════════════════ -->
+<section data-screen="customise">
+  <div class="sectionhd">
+    <div><h2>Customise</h2><span class="micro" id="custMeta"></span></div>
+    <div class="row">
+      <button class="btn" id="b_undo">Undo</button>
+      <button class="btn" id="b_reset">Reset to the concept</button>
+      <button class="btn btn-primary" id="b_custvalidate">Validate</button>
+    </div>
+  </div>
+  <div class="cols-2">
+    <div class="pane stack">
+      <div id="custCard"></div>
+      <div class="field"><label for="i_instr">Or say it in words</label>
+        <input class="input" id="i_instr" placeholder="Make it more premium · নাম বড় করুন"></div>
+      <div class="row"><button class="btn btn-primary" id="b_apply">Apply</button></div>
+      <div id="instr"></div>
+      <p class="lede" style="font-size:12px">The pickers and the text box emit the same closed set of operations. Neither can move an element or set a size; the geometry is always re-composed.</p>
+    </div>
+    <div class="pane pane-r stack">
+      <div><span class="lbl" id="lbl_ctype">Typography</span>
+        <div class="chips" role="group" aria-labelledby="lbl_ctype" id="altType" style="margin-top:7px"></div></div>
+      <div><span class="lbl" id="lbl_ccol">Colour</span>
+        <div class="chips" role="group" aria-labelledby="lbl_ccol" id="altColour" style="margin-top:7px"></div></div>
+      <div><span class="lbl" id="lbl_clay">Layout</span>
+        <div class="chips" role="group" aria-labelledby="lbl_clay" id="altLayout" style="margin-top:7px"></div></div>
+      <div><span class="lbl" id="lbl_cden">Density</span>
+        <div class="chips" role="group" aria-labelledby="lbl_cden" id="altDensity" style="margin-top:7px"></div></div>
+      <div><span class="lbl" id="lbl_ccor">Corners</span>
+        <div class="chips" role="group" aria-labelledby="lbl_ccor" id="altCorner" style="margin-top:7px"></div></div>
+      <div><span class="lbl" id="lbl_cback">Back of the card</span>
+        <div class="chips" role="group" aria-labelledby="lbl_cback" id="altBack" style="margin-top:7px"></div></div>
+    </div>
+  </div>
 </section>
 
 <!-- ══════════════════ VALIDATE ══════════════════ -->
@@ -1816,13 +1864,18 @@ function box(slot, ctx){
    ONE function. Switches on slot.kind (a generic primitive), never on a
    layout id. Twelve layouts, one renderer. Output is SVG in millimetres —
    the same geometry a PDF/X-4 writer consumes.                          */
+let _clipSeq = 0;
 function renderSVG(c, opt={}){
   if (!c || c.eliminated) return null;
   const { fmt, pal } = c;
+  /* Rounded corners are a die-cut, not a CSS flourish: the die is a one-off
+     charge and the radius must not eat into the safe area. The artwork is
+     clipped to the trim shape so a full-bleed ground follows the corner. */
+  const rad = Math.max(0, Math.min(6, Number(c.spec.corner) || 0));
   const showGuides = opt.guides;
   const esc = s => String(s).replace(/[&<>]/g, m=>({'&':'&amp;','<':'&lt;','>':'&gt;'}[m]));
   const col = k => pal[k] || k;
-  let body = `<rect x="0" y="0" width="${fmt.w}" height="${fmt.h}" fill="${col('bg')}"/>`;
+  let body = `<rect x="0" y="0" width="${fmt.w}" height="${fmt.h}" rx="${rad}" ry="${rad}" fill="${col('bg')}"/>`;
 
   for (const el of c.elements){
     const g = el.geom, C = col(el.color);
@@ -1890,6 +1943,11 @@ function renderSVG(c, opt={}){
       const g=el.geom;
       body += `<rect x="${g.x}" y="${g.y}" width="${g.w}" height="${g.h}" fill="none" stroke="#ec3013" stroke-width="0.1" opacity=".5"/>`;
     }
+  }
+  if (rad > 0){
+    const cid = 'cwclip' + (++_clipSeq);
+    body = `<defs><clipPath id="${cid}"><rect x="0" y="0" width="${fmt.w}" height="${fmt.h}"
+      rx="${rad}" ry="${rad}"/></clipPath></defs><g clip-path="url(#${cid})">${body}</g>`;
   }
   return `<svg class="card" viewBox="0 0 ${fmt.w} ${fmt.h}" xmlns="http://www.w3.org/2000/svg"
            style="aspect-ratio:${fmt.w}/${fmt.h}">${body}</svg>`;
@@ -2503,6 +2561,7 @@ const EDIT_OPS = {
     return pool.length ? {...d, layout:pool[0].id} : d;
   },
   setDensity:      (d,a)=> ({...d, density:a}),
+  setCorner:       (d,a)=> ({...d, corner:Number(a)||0}),
   /* promoteSlot is the load-bearing one: it re-selects the composition that
      gives this slot the most room, rather than scaling type in place. */
   promoteSlot:     (d,a)=>{
@@ -2567,6 +2626,8 @@ const EDIT_RULES = [
   { re:/serif/i,                          label:'serif type', ops:[['shiftType','serif']] },
   { re:/mono(space)?/i,                   label:'monospaced type', ops:[['shiftType','mono']] },
   { re:/tight|dense|compact|ঘন/i,          label:'tighter', ops:[['setDensity','tight']] },
+  { re:/round(ed)? corner|rounded|গোল কোণ/i, label:'rounded corners', ops:[['setCorner','2']] },
+  { re:/square corner|sharp corner/i,      label:'square corners', ops:[['setCorner','0']] },
   { re:/contact.*(back|behind)|(back|behind).*contact|যোগাযোগ.*পিছ/i,
     label:'contact on the back', ops:[['moveSlotToBack','contact']] }
 ];
@@ -2621,7 +2682,8 @@ const FINISH_COST = {
   'softtouch':  { label:'Soft-touch',        setup:0,   per1000:520 },
   'spotuv':     { label:'Spot UV',           setup:400, per1000:350 },
   'foil':       { label:'Gold foil',         setup:700, per1000:600 },
-  'emboss':     { label:'Embossing',         setup:900, per1000:500 }
+  'emboss':     { label:'Embossing',         setup:900, per1000:500 },
+  'rounded':    { label:'Rounded corners',   setup:650, per1000:220 }
 };
 const DELIVERY = { dhaka:80, outside:150 };
 const MARGIN = 1.55;
@@ -2722,12 +2784,20 @@ const ICON = {
 };
 const STATE_ICON = { pass:'pass', review:'review', fail:'fail' };
 
-const SCREENS = ['start','brief','generating','concepts','detail','validate','export','order',
+const SCREENS = ['start','brief','generating','concepts','detail','customise','validate','export','order',
   'tracking','noresults','library','mockups','bulk','dashboard','profiles','pricing','signin',
   'settings','studio','compedit','layoutbuild'];
 const NAV = [['start','Start'],['brief','Brief'],['concepts','Concepts'],['library','Library'],
   ['mockups','Mockups'],['bulk','Bulk'],['dashboard','My designs'],['studio','Studio'],
   ['pricing','Plans'],['signin','Account']];
+const STAGES = [
+  ['08','Generate',       'generating'],
+  ['09','Explore',        'concepts'],
+  ['10','Customise',      'customise'],
+  ['11','Validate',       'validate'],
+  ['12','Export or order','export']
+];
+const FLOW_SCREENS = ['generating','concepts','detail','customise','validate','export'];
 const STEPS = [
   ['01','Who it is for'], ['02','Contact routes'], ['03','Logo'],
   ['04','Personality'],   ['05','Language and size'], ['06','Printing'], ['07','Review']
@@ -2740,7 +2810,7 @@ const state = {
   industry:'doctor', personality:['traditional','premium'], finishes:['matte','foil'],
   qty:500, zone:'dhaka',
   refine:null, instrLog:[], history:[], logo:null, bulk:null, shareCode:null,
-  gen:null, genStage:0, seen:0,
+  gen:null, genStage:0, seen:0, view:'grid', corner:0,
   press:null, scene:'On a desk', libCat:'Layouts', compId:0, profileIdx:0,
   lbId:null, lbSlot:0, lbView:'slots', compKind:null, compTags:['premium'],
   order:null, dash:null, trackRef:null, orderTotal:0, orderSub:0
@@ -2766,7 +2836,7 @@ function writeForm(c){
 
 function specFor(layoutId, content){
   return { format:state.format, type:state.type, palette:state.palette,
-           density:state.density, layout:layoutId, content,
+           density:state.density, layout:layoutId, content, corner:state.corner || 0,
            share:{ origin:(typeof location !== 'undefined' && location.origin &&
                            /^https?:/.test(location.origin)) ? location.origin : 'https://cardworks.bd',
                    code: state.shareCode || null } };
@@ -2822,6 +2892,7 @@ function currentDesign(){
     ? { layout:cand.layout, palette:cand.palette, type:cand.type }
     : { layout:state.layout, palette:state.palette, type:state.type };
   const d = { ...base, density:state.density, back:baseBack, format:state.format,
+              corner:state.corner || 0,
               script: frontScript ? 'bangla' : 'latin', finishes:state.finishes.slice() };
   return state.refine || d;
 }
@@ -2882,7 +2953,8 @@ function draw(){
     start:'Start', order:'Checkout', tracking:'Order ' + (state.trackRef || ''),
     noresults:'Constraint conflict', dashboard:'My designs', profiles:'Brand profiles',
     pricing:'Plans', signin:'Account', settings:'Settings',
-    studio:'Design studio — internal', compedit:'New component', layoutbuild:'Layout builder'
+    studio:'Design studio — internal', compedit:'New component', layoutbuild:'Layout builder',
+    customise:'Customise'
   }[state.screen] || '';
   $('#navlinks').innerHTML = NAV.map(([s,l]) =>
     `<button class="btn btn-ghost" data-go="${s}" aria-current="${state.screen===s}">${l}</button>`).join('');
@@ -2909,6 +2981,42 @@ function draw(){
   if (state.screen === 'studio')     drawStudio();
   if (state.screen === 'compedit')   drawCompEdit();
   if (state.screen === 'layoutbuild')drawLayoutBuild(content);
+  if (state.screen === 'customise') drawCustomise(design, content);
+  drawStageBar();
+}
+
+
+/* Stages 08–12 of the rail. They are a real journey, not decoration: each
+   one is reachable only once the stage before it has produced something. */
+function stageState(id){
+  if (id === 'generating') return 'ready';
+  return state.gen && state.gen.picked.length ? 'ready' : 'locked';
+}
+function stageForScreen(sc){
+  if (sc === 'detail') return 'concepts';
+  return sc;
+}
+function goStage(target){
+  if (target === 'generating'){ runGenerate(); return; }
+  if (stageState(target) === 'locked'){ runGenerate(); return; }
+  go(target);
+}
+function drawStageBar(){
+  const bar = $('#stagebar');
+  if (!bar) return;
+  const active = stageForScreen(state.screen);
+  const show = FLOW_SCREENS.indexOf(state.screen) >= 0;
+  bar.style.display = show ? 'flex' : 'none';
+  if (!show){ bar.innerHTML = ''; return; }
+  const cur = STAGES.findIndex(x => x[2] === active);
+  bar.innerHTML = STAGES.map(([n,l,sc],i) => {
+    const locked = stageState(sc) === 'locked';
+    return `<button data-stage="${sc}" ${locked?'disabled':''}
+      aria-current="${sc===active?'step':'false'}">
+      <span class="railnum">${n}</span><span>${l}</span>
+      ${i < cur ? `<span class="railmark">${ICON.check}</span>` : ''}</button>`;
+  }).join('');
+  $$('#stagebar [data-stage]').forEach(b => b.onclick = () => goStage(b.dataset.stage));
 }
 
 /* ── Brief ─────────────────────────────────────────────────────────────── */
@@ -2920,9 +3028,16 @@ function drawBrief(content){
     `<button class="railitem" data-step-go="${i}" aria-current="${i===state.step?'step':'false'}">
       <span class="railnum">${n}</span><span>${l}</span>
       ${i < state.step ? `<span class="railmark">${ICON.check}</span>` : ''}
-    </button>`).join('');
+    </button>`).join('')
+    + STAGES.map(([n,l,sc]) => {
+      const locked = stageState(sc) === 'locked';
+      return `<button class="railitem" data-stage-go="${sc}" ${locked?'disabled':''}
+        style="${locked?'color:var(--faint)':''}">
+        <span class="railnum">${n}</span><span>${l}</span></button>`;
+    }).join('');
   $$('#rail [data-step-go]').forEach(b =>
     b.onclick = () => { state.step = Number(b.dataset.stepGo); draw(); });
+  $$('#rail [data-stage-go]').forEach(b => b.onclick = () => goStage(b.dataset.stageGo));
 
   const last = state.step === 6;
   $('#b_next').innerHTML = last
@@ -3005,6 +3120,38 @@ function drawConcepts(){
   }).join('');
   state.seen = 1;
   bindTiles('#conceptTiles .tile', t => { state.pick = Number(t.dataset.pick); go('detail'); });
+
+  /* Compare puts the six side by side with what actually separates them:
+     the score dimensions, and what the fit ladder had to do to each. */
+  const grid = state.view === 'grid';
+  $('#conceptTiles').style.display = grid ? 'grid' : 'none';
+  $('#compareView').style.display  = grid ? 'none' : 'block';
+  $$('[data-view]').forEach(b => {
+    b.setAttribute('aria-pressed', String(b.dataset.view === state.view));
+    b.onclick = () => { state.view = b.dataset.view; draw(); };
+  });
+  if (!grid){
+    $('#compareView').innerHTML = '<div class="cmp">' + g.picked.map((c,i) => {
+      const L = LAYOUTS.find(l => l.id === c.layout);
+      const adj = c.composed.trace.length;
+      return `<div>
+        ${renderSVG(c.composed)}
+        <h5 style="margin-top:var(--space-4)">${String(i+1).padStart(2,'0')} · ${esc(L.name)}</h5>
+        <dl class="kv" style="margin-top:var(--space-3)">
+          <dt>Score</dt><dd>${(c.score.total*100).toFixed(1)}</dd>
+          ${Object.keys(W).map(k => `<dt>${k.replace(/([A-Z])/g,' $1').toLowerCase()}</dt>
+            <dd>${(c.score.parts[k]*100).toFixed(0)}</dd>`).join('')}
+          <dt>Palette</dt><dd>${esc(PALETTES.find(p=>p.id===c.palette).name)}</dd>
+          <dt>Type</dt><dd>${esc(TYPE_SYSTEMS.find(t=>t.id===c.type).name)}</dd>
+          <dt>Smallest</dt><dd>${Math.min(...c.composed.elements.filter(e=>e.fit).map(e=>e.fit.sizePt)).toFixed(1)} pt</dd>
+          <dt>Fit ladder</dt><dd>${adj ? adj + ' adjustment' + (adj>1?'s':'') : 'untouched'}</dd>
+        </dl>
+        <button class="btn btn-primary" data-cmp="${i}" style="margin-top:var(--space-4)">Take this one</button>
+      </div>`;
+    }).join('') + '</div>';
+    $$('#compareView [data-cmp]').forEach(b =>
+      b.onclick = () => { state.pick = Number(b.dataset.cmp); go('detail'); });
+  }
 }
 
 /* ── Detail ────────────────────────────────────────────────────────────── */
@@ -3061,6 +3208,57 @@ function drawDetail(design, content){
             ? log.changes.map(c => `<div class="check" style="padding:5px 0"><span class="ico"></span>
                 <span class="mono">${c.key}: ${esc(c.from)} → <b>${esc(c.to)}</b></span></div>`).join('')
             : '<p class="lede" style="font-size:12px">Already in that state — nothing changed.</p>');
+  $('#b_undo').disabled = !state.history.length;
+}
+
+
+/* ── 10 · Customise — every picker emits an operation from the closed set,
+   the same one the text box uses. Nothing here writes geometry. ───────── */
+function drawCustomise(design, content){
+  const { front } = facesFor(design, content);
+  $('#custCard').innerHTML = renderSVG(front, { guides:false }) ||
+    `<div class="deadbox"><span class="pill pill-warn">Eliminated</span>
+      <span class="tilemeta">${esc(front?.eliminated||'')}</span></div>`;
+  $('#custMeta').textContent = state.refine
+    ? `${state.history.length} change${state.history.length===1?'':'s'} from the ranked concept`
+    : 'Unchanged from the ranked concept';
+
+  const apply = (op, arg) => {
+    const { design:nd, changes } = applyOps(lastDesign, [{ op, arg }]);
+    state.history.push({ ...lastDesign });
+    state.refine = nd;
+    state.instrLog.push({ ops:[{op,arg}], matched:[op], changes, unmapped:false });
+    draw();
+  };
+  const bank = (sel, items, isOn, op) => {
+    $(sel).innerHTML = items.map(([label, arg, extra]) =>
+      `<button class="chip chip-sm" data-arg="${esc(arg)}" aria-pressed="${isOn(arg)}">${
+        extra||''}${esc(label)}</button>`).join('');
+    $$(sel + ' .chip').forEach(b => b.onclick = () => apply(op, b.dataset.arg));
+  };
+
+  bank('#altType', TYPE_SYSTEMS.filter(t=>t.id!=='__preview').map(t => [t.name.split(' + ')[1] || t.name, t.id]),
+       a => design.type === a, 'setTypeSystem');
+  bank('#altColour', PALETTES.filter(p=>p.id!=='__preview').map(p => [p.name, p.id,
+        `<span style="display:inline-block;width:26px;height:11px;margin-right:7px;vertical-align:-1px;
+          background:linear-gradient(90deg,${p.bg} 50%,${p.accent} 50%);border:1px solid var(--hair)"></span>`]),
+       a => design.palette === a, 'setPalette');
+  bank('#altLayout', LAYOUTS.filter(l => l.face === 'front').map(l => [l.name, l.id]),
+       a => design.layout === a, 'setLayout');
+  bank('#altDensity', [['Airy','airy'],['Balanced','balanced'],['Tight','tight']],
+       a => design.density === a, 'setDensity');
+  bank('#altCorner', [['Square','0'],['2 mm radius','2'],['4 mm radius','4']],
+       a => String(design.corner || 0) === a, 'setCorner');
+  bank('#altBack', LAYOUTS.filter(l => l.face === 'back').map(l => [l.name, l.id]),
+       a => design.back === a, 'setBack');
+
+  const log = state.instrLog[state.instrLog.length-1];
+  $('#instr').innerHTML = !log ? ''
+    : log.unmapped
+      ? checkRow({ s:'review', label:log.note, note:'Closest it can do: ' + log.suggestions.join(' · ') })
+      : checkRow({ s:'pass', label:'Applied ' + log.ops.map(o=>`${o.op}(${o.arg})`).join(' · '),
+          note: log.changes.length ? log.changes.map(c=>`${c.key}: ${c.from} → ${c.to}`).join(' · ')
+                                   : 'Already in that state' });
   $('#b_undo').disabled = !state.history.length;
 }
 
@@ -3877,6 +4075,8 @@ function init(){
 
 
   /* ── the screens added to complete the designed system ── */
+  $('#b_tocustomise').onclick   = () => go('customise');
+  $('#b_custvalidate').onclick  = () => go('validate');
   $('#b_startgo').onclick = () => {
     const r = readSentence($('#i_sentence').value);
     if (r.industry){ state.industry = r.industry; $('#i_industry').value = r.industry; }
