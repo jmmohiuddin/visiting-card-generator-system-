@@ -68,13 +68,16 @@ export default async (req) => {
 
       const hash = specHash(spec);
       const label = typeof body.label === 'string' ? body.label.slice(0, 80) : null;
+      // An anonymous per-browser key so "My designs" can list what this
+      // person saved. It is not an account and grants nothing.
+      const owner = /^[A-Za-z0-9_-]{8,64}$/.test(String(body.owner || '')) ? body.owner : null;
 
       // Content addressing means saving the same design twice is idempotent:
       // ON CONFLICT DO NOTHING, then read back whichever row won.
       let code = hash.slice(0, 8);
       await sql`
-        INSERT INTO design_specs (spec_hash, short_code, spec_json, label)
-        VALUES (${hash}, ${code}, ${JSON.stringify(spec)}::jsonb, ${label})
+        INSERT INTO design_specs (spec_hash, short_code, spec_json, label, owner_key)
+        VALUES (${hash}, ${code}, ${JSON.stringify(spec)}::jsonb, ${label}, ${owner})
         ON CONFLICT (spec_hash) DO NOTHING`;
 
       const rows = await sql`SELECT short_code FROM design_specs WHERE spec_hash = ${hash} LIMIT 1`;
@@ -83,8 +86,8 @@ export default async (req) => {
         // Same 8-hex prefix, different design. Widen and retry once.
         code = hash.slice(0, 12);
         await sql`
-          INSERT INTO design_specs (spec_hash, short_code, spec_json, label)
-          VALUES (${hash}, ${code}, ${JSON.stringify(spec)}::jsonb, ${label})`;
+          INSERT INTO design_specs (spec_hash, short_code, spec_json, label, owner_key)
+          VALUES (${hash}, ${code}, ${JSON.stringify(spec)}::jsonb, ${label}, ${owner})`;
       }
 
       await sql`INSERT INTO usage_events (type, short_code) VALUES ('design.save', ${code})`;

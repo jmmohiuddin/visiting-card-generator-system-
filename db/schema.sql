@@ -53,3 +53,51 @@ CREATE TABLE IF NOT EXISTS usage_events (
   created_at timestamptz NOT NULL DEFAULT now()
 );
 CREATE INDEX IF NOT EXISTS usage_events_type_ix ON usage_events (type, created_at DESC);
+
+-- ── Added when the Order, Tracking and My-designs screens were built ──────
+-- These tables exist because there is now code using them. Orders carry the
+-- proof-before-charge flow the prototype designed: the run does not start,
+-- and nothing is charged, until the customer has held a printed proof.
+
+ALTER TABLE design_specs ADD COLUMN IF NOT EXISTS owner_key text;
+CREATE INDEX IF NOT EXISTS design_specs_owner_ix ON design_specs (owner_key, created_at DESC);
+
+CREATE TABLE IF NOT EXISTS orders (
+  id          bigserial PRIMARY KEY,
+  ref         text        NOT NULL UNIQUE,
+  owner_key   text,
+  short_code  text        NOT NULL,
+  qty         int         NOT NULL CHECK (qty > 0),
+  press       text        NOT NULL,
+  finishes    jsonb       NOT NULL DEFAULT '[]'::jsonb,
+  zone        text        NOT NULL DEFAULT 'dhaka',
+  currency    text        NOT NULL DEFAULT 'BDT',
+  subtotal    int         NOT NULL,
+  total       int         NOT NULL,
+  status      text        NOT NULL DEFAULT 'files_locked'
+              CHECK (status IN ('files_locked','at_press','proof_printed','proof_delivered',
+                                'awaiting_approval','printing','delivered','cancelled')),
+  recipient   jsonb       NOT NULL DEFAULT '{}'::jsonb,
+  created_at  timestamptz NOT NULL DEFAULT now()
+);
+CREATE INDEX IF NOT EXISTS orders_owner_ix ON orders (owner_key, created_at DESC);
+
+-- Append-only event log. The order's status is derived from it, so the
+-- history of who approved what and when is never overwritten.
+CREATE TABLE IF NOT EXISTS order_events (
+  id         bigserial PRIMARY KEY,
+  order_ref  text        NOT NULL REFERENCES orders(ref) ON DELETE CASCADE,
+  type       text        NOT NULL,
+  actor      text        NOT NULL DEFAULT 'system',
+  note       text,
+  created_at timestamptz NOT NULL DEFAULT now()
+);
+CREATE INDEX IF NOT EXISTS order_events_ref_ix ON order_events (order_ref, created_at);
+
+-- Order references come from their own sequence. Deriving them from a row
+-- count and then truncating to a fixed width collides silently: ten
+-- consecutive orders produced the same reference and the second one failed
+-- on the unique index. A sequence is also race-safe under concurrency.
+CREATE SEQUENCE IF NOT EXISTS orders_ref_seq START 2200;
+ALTER TABLE orders ALTER COLUMN ref
+  SET DEFAULT 'ORD-' || lpad(nextval('orders_ref_seq')::text, 5, '0');
