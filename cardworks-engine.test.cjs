@@ -1,10 +1,24 @@
 /* Headless verification of the CARDWORKS engine.
-   Extracts the <script> from cardworks-engine.html, stubs the DOM/canvas
-   surface with a font-metric model, and asserts engine behaviour. */
+   Loads the engine + shell sources, stubs the DOM/canvas surface with a
+   font-metric model, and asserts engine behaviour. */
 const fs = require('fs');
-const SRC = require('path').join(__dirname, 'index.html');
-const html = fs.readFileSync(SRC, 'utf8');
-const js = html.split('<script>').pop().split('</script>')[0];
+const path = require('path');
+const html = fs.readFileSync(path.join(__dirname, 'index.html'), 'utf8');
+
+/* The engine and the shell used to be one inline <script>. They are separate
+   files now so the surface can be worked on without editing the same 4,000
+   lines. The list below is the load order index.html declares — concatenating
+   them reproduces exactly the one scope the browser gives classic scripts,
+   and the assertion keeps the two from drifting apart silently. */
+const SOURCES = [
+  'assets/engine.js', 'assets/ui-shell.js', 'assets/ui-brief.js', 'assets/ui-concepts.js',
+  'assets/ui-validate.js', 'assets/ui-order.js', 'assets/ui-misc.js', 'assets/ui-init.js'
+];
+const declared = [...html.matchAll(/<script src="\/(assets\/[^"]+)"><\/script>/g)].map(m => m[1]);
+if (declared.join(',') !== SOURCES.join(','))
+  throw new Error('index.html script order drifted from the test loader:\n  ' + declared.join('\n  '));
+const js = SOURCES.map(f => fs.readFileSync(path.join(__dirname, f), 'utf8')).join('\n');
+const CSS = fs.readFileSync(path.join(__dirname, 'assets/app.css'), 'utf8');
 
 // ── font-metric model: per-glyph advance ratios approximating real faces ──
 function advance(ch, family){
@@ -719,11 +733,13 @@ ok('no bare <label> without a for= remains',
    'a label is still unassociated');
 ok('grouped chip controls use role=group with an accessible name',
    (HTML.match(/role="group" aria-labelledby=/g)||[]).length >= 2);
+/* Tiles are drawn from JS and the focus ring lives in the stylesheet, so
+   these three read their own source rather than the document. */
 ok('gallery tiles are keyboard operable (role, tabindex, key handler)',
-   /role="button" tabindex="0"/.test(HTML) && /onkeydown = e => \{ if \(e\.key === 'Enter'/.test(HTML));
+   /role="button" tabindex="0"/.test(js) && /onkeydown = e => \{ if \(e\.key === 'Enter'/.test(js));
 ok('tiles expose selected state to assistive tech',
-   (HTML.match(/aria-pressed="\$\{/g)||[]).length >= 2);
-ok('a visible focus style exists', /:focus-visible\{outline/.test(HTML));
+   (js.match(/aria-pressed="\$\{/g)||[]).length >= 2);
+ok('a visible focus style exists', /:focus-visible\{outline/.test(CSS));
 
 H('32. Session persistence');
 ok('localStorage is written on draw', (()=>{ const v = _ls['cardworks.session']; return !!v && v.length > 20; })());
