@@ -108,7 +108,12 @@ function bindTiles(sel, fn){
 }
 
 let lastDesign = null;
-function go(screen){ state.screen = screen; if (typeof scrollTo === 'function') scrollTo(0,0); draw(); }
+function go(screen){
+  /* A screen cut from MVP (PRD §5.2) is unreachable, not merely unlinked —
+     otherwise it comes back the first time someone types the hash. */
+  if (typeof screenEnabled === 'function' && !screenEnabled(screen)) screen = 'start';
+  state.screen = screen; if (typeof scrollTo === 'function') scrollTo(0,0); draw();
+}
 
 /* ── the one authored motion moment ───────────────────────────────────────
    Generation is already finished when this runs; the stages reveal the real
@@ -206,7 +211,7 @@ function draw(){
     studio:'Design studio — internal', compedit:'New component', layoutbuild:'Layout builder',
     customise:'Customise'
   }[state.screen] || '';
-  $('#navlinks').innerHTML = NAV.map(([s,l]) =>
+  $('#navlinks').innerHTML = NAV.filter(([s]) => screenEnabled(s)).map(([s,l]) =>
     `<button class="btn btn-ghost" data-go="${s}" aria-current="${state.screen===s}">${l}</button>`).join('');
   $$('#navlinks [data-go]').forEach(b => b.onclick = () => go(b.dataset.go));
 
@@ -368,3 +373,172 @@ function readSentence(text){
   if (/[ঀ-৿]/.test(t)){ out.script = 'bangla'; out.hits++; }
   return out;
 }
+
+/* ══════════════════════════════════════════════════════════════════════════
+   SHELL CONTRACT
+   --------------------------------------------------------------------------
+   Everything below is depended on by every ui-*.js file. It exists so that
+   the four things the Wireframing Document asks for on every screen — a
+   thumb-reachable action bar, an honest pending state, an honest failure
+   state, and a real answer when the network is gone — are written once and
+   look the same everywhere, rather than reinvented per screen.
+   ══════════════════════════════════════════════════════════════════════ */
+
+/* ── Feature flags ────────────────────────────────────────────────────────
+   Master PRD §5.2 cuts four things from MVP that were built anyway: bulk
+   generation, the component studio, photoreal mockups, and a four-tier
+   pricing table. Deleting working code to re-add it in V2 is waste; hiding
+   it behind a flag that defaults off is the same outcome and reversible.
+   Flip one in the console (`FLAGS.set('bulk', true)`) to demo it. */
+const FLAG_DEFAULTS = {
+  bulk:     false,   // PRD §5.2 — V2, gated on a corporate buyer asking
+  studio:   false,   // PRD §5.2 — author components in git until the library settles
+  mockups:  false,   // PRD §5.2 — render-cost sink that sells nothing yet
+  profiles: false,   // multi-tenant adjacent; PRD §5.2 defers orgs entirely
+  tiers4:   false    // PRD §5.2 — the pricing table collapses to two lines
+};
+const FLAGS = {
+  get(k){
+    const o = lsGet('cardworks.flags', {});
+    return k in o ? !!o[k] : !!FLAG_DEFAULTS[k];
+  },
+  set(k, v){ const o = lsGet('cardworks.flags', {}); o[k] = !!v; lsSet('cardworks.flags', o); draw(); },
+  all(){ const o = lsGet('cardworks.flags', {}); return { ...FLAG_DEFAULTS, ...o }; }
+};
+
+/* ── Language. The Wireframing Document §5.1 puts this on the Start screen
+   rather than inside the brief: defaulting to English before asking is
+   itself an English-first bias in a market that is majority Bangla. */
+const UI_STRINGS = {
+  en: {
+    continue:'Continue', back:'Back', skip:'Skip', start:'Start my brief',
+    retry:'Try again', offline:'You are offline', saving:'Saving…', loading:'Working…'
+  },
+  bn: {
+    continue:'পরবর্তী', back:'আগে', skip:'বাদ দিন', start:'ব্রিফ শুরু করুন',
+    retry:'আবার চেষ্টা করুন', offline:'আপনি অফলাইনে আছেন', saving:'সংরক্ষণ হচ্ছে…', loading:'কাজ চলছে…'
+  }
+};
+function uiLang(){ return lsGet('cardworks.lang', null) || 'en'; }
+function setUiLang(l){
+  lsSet('cardworks.lang', l === 'bn' ? 'bn' : 'en');
+  document.documentElement.setAttribute('lang', l === 'bn' ? 'bn' : 'en');
+  draw();
+}
+const t = k => (UI_STRINGS[uiLang()] || UI_STRINGS.en)[k] || UI_STRINGS.en[k] || k;
+
+/* ── The thumb zone. Wireframe §4: the primary action is bottom-anchored and
+   never scrolls out of reach on a phone. Screens call this instead of
+   putting a button at the end of their own content. */
+function bottomBar(inner){
+  return `<div class="actionbar" role="group" aria-label="Primary actions">${inner}</div>`;
+}
+
+/* ── Async state. Every network call in this product goes through `api()`,
+   which is what makes "loading", "failed" and "offline" a property of the
+   shell instead of four different half-implementations. */
+const net = { pending:new Set(), lastError:null };
+
+function isOffline(){ return typeof navigator !== 'undefined' && navigator.onLine === false; }
+
+/** Fetch against our own API, returning the parsed body or throwing an
+ *  Error carrying `{ code, message, remediation }` from the envelope in
+ *  lib/http.mjs. Mutating calls carry an Idempotency-Key so a retry after a
+ *  dropped reply cannot become a second order. */
+async function api(path, opts = {}){
+  const key = 'net:' + path + ':' + (opts.method || 'GET');
+  net.pending.add(key); net.lastError = null;
+  if (typeof draw === 'function' && opts.quiet !== true) drawPendingOnly();
+  try {
+    if (isOffline()) {
+      const e = new Error('You are offline. Briefing and preview still work; this step needs a connection.');
+      e.code = 'offline'; e.remediation = 'Reconnect and try again.'; throw e;
+    }
+    const headers = { 'content-type':'application/json' };
+    const method = opts.method || 'GET';
+    if (method !== 'GET' && method !== 'HEAD') {
+      headers['idempotency-key'] = opts.idempotencyKey ||
+        ('idem-' + specHash({ p:path, b:opts.body || null, o:ownerKey(), n:idemNonce() }));
+    }
+    const res = await fetch(path, {
+      method, headers,
+      body: opts.body === undefined ? undefined : JSON.stringify(opts.body)
+    });
+    const body = await res.json().catch(() => ({}));
+    if (!res.ok) {
+      const env = body.error || {};
+      const e = new Error(env.message || 'That did not work.');
+      e.code = env.code || ('http_' + res.status);
+      e.field = env.field; e.remediation = env.remediation;
+      throw e;
+    }
+    return body;
+  } catch (err) {
+    net.lastError = { code: err.code || 'network', message: err.message,
+                      remediation: err.remediation || 'Check your connection and try again.' };
+    throw err;
+  } finally {
+    net.pending.delete(key);
+    if (opts.quiet !== true) draw();
+  }
+}
+/* A retry of the same call is the same key; a genuinely new attempt after a
+   failure is a new one. The nonce advances only when the user asks again. */
+let _idemNonce = 0;
+const idemNonce = () => _idemNonce;
+const newAttempt = () => { _idemNonce++; };
+
+const isPending = () => net.pending.size > 0;
+
+/** Repaint only the parts that show pending state, so a click feels
+    immediate without re-running the composer for every keystroke. */
+function drawPendingOnly(){
+  $$('[data-pending-when]').forEach(el => {
+    const on = isPending();
+    el.setAttribute('aria-busy', String(on));
+    el.toggleAttribute?.('disabled', on);
+  });
+}
+
+/** The one loading block. Wireframing §7 lists "Loading" as present only on
+    the generating screen; anything async now has one. */
+const pendingBlock = (what) =>
+  `<div class="state state-pending" role="status" aria-live="polite">
+     <span class="spin" aria-hidden="true"></span> ${esc(what || t('loading'))}</div>`;
+
+/** The one failure block. It always names a next step, because the API
+    envelope always carries one (Technical Design §8). */
+function errorBlock(err, retryLabel){
+  const e = err || net.lastError; if (!e) return '';
+  return `<div class="state state-error" role="alert">
+    <b>${esc(e.message)}</b>
+    ${e.remediation ? `<span class="note">${esc(e.remediation)}</span>` : ''}
+    ${retryLabel ? `<button class="btn" data-retry="1">${esc(retryLabel)}</button>` : ''}
+  </div>`;
+}
+function bindRetry(fn){
+  $$('[data-retry]').forEach(b => b.onclick = () => { newAttempt(); net.lastError = null; fn(); });
+}
+
+/** Offline is a first-class state here, not an error: Technical Design §9
+    says briefing and preview must keep working with no network at all. */
+const offlineBanner = () => isOffline()
+  ? `<div class="state state-offline" role="status">${esc(t('offline'))} — briefing and preview still work. Export and ordering need a connection.</div>`
+  : '';
+
+/* ── Unsaved work. Wireframing §7 flags this as unhandled: a user who
+   refines a design and closes the tab loses it silently. */
+const work = { dirty:false, savedHash:null };
+function markDirty(){ work.dirty = true; }
+function markSaved(hash){ work.dirty = false; work.savedHash = hash || null; }
+function beforeUnloadGuard(e){
+  if (!work.dirty) return undefined;
+  e.preventDefault(); e.returnValue = '';
+  return '';
+}
+
+/* ── Screen visibility. A flagged-off screen must not be reachable from nav,
+   from the stage rail, or by setting the hash by hand. */
+const SCREEN_FLAG = { bulk:'bulk', studio:'studio', compedit:'studio',
+                      layoutbuild:'studio', mockups:'mockups', profiles:'profiles' };
+const screenEnabled = (sc) => !SCREEN_FLAG[sc] || FLAGS.get(SCREEN_FLAG[sc]);
