@@ -1,10 +1,17 @@
 [build]
   publish = "."
   functions = "netlify/functions"
-  command = "npm run test"
+  command = "npm run test:deploy"
 
 [functions]
   node_bundler = "esbuild"
+  # The server-side preflight gate reads assets/engine.js at runtime and
+  # evaluates it, so the browser and the server run byte-identical composer
+  # code. esbuild only bundles what is imported, and a file read with fs is
+  # not an import — so without this the gate threw ENOENT inside the lambda
+  # and the endpoint reported it as a component-library mismatch, which is
+  # the wrong cause and the wrong thing for a customer to act on.
+  included_files = ["assets/**", "lib/**", "db/**"]
 
 # The short-link the QR fallback encodes. A scanned card lands here.
 [[redirects]]

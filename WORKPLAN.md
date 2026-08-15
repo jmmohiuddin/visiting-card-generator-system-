@@ -234,3 +234,24 @@ shop adoption, press file acceptance, the Bangla conjunct floor on real stock,
 and real cost quotes. Those need shoe leather in Nilkhet, not a sprint. The
 cost constants and the 7.5pt Bangla floor stay marked as unvalidated in the
 code until someone has printed the test sheet.
+
+## Test isolation: two suites depend on ambient DATABASE_URL
+
+`tests/library.test.mjs` and `tests/pdf.test.mjs` assert the no-database
+paths — a delegated route answering 503, a render refusing without storage.
+They read `process.env.DATABASE_URL` from the ambient environment, so when one
+is present they exercise the *with*-database path instead and fail:
+
+    ✗ a delegated route forwards headers … — 403 then 422   (expected 503)
+    ✗ a printable spec comes back as PDF bytes
+
+This surfaced when the Netlify build injected the production connection
+string. `npm run test:deploy` now runs with `env -u DATABASE_URL`, which fixes
+the build and is the right behaviour anyway: a build step should never hold a
+connection to the production database.
+
+The underlying weakness is still there. A suite whose result depends on
+whether an unrelated variable happens to be set is not deterministic, and the
+next person to run `npm test` with a `.env` loaded will see the same two
+failures. The fix is for those tests to control the variable explicitly rather
+than inherit it.

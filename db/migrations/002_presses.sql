@@ -115,9 +115,6 @@ ALTER TABLE orders ADD COLUMN IF NOT EXISTS press_id bigint REFERENCES presses(i
 ALTER TABLE orders ADD COLUMN IF NOT EXISTS quote_id text;
 CREATE INDEX IF NOT EXISTS orders_press_ix ON orders (press_id, created_at DESC);
 
-UPDATE orders o SET press_id = p.id
-  FROM presses p WHERE o.press_id IS NULL AND o.press = p.name;
-
 -- ── Seed: the four Dhaka presses the order screen already names ──────────
 -- Lifted verbatim from `const PRESSES` in assets/ui-shell.js so the records
 -- and the screen agree on day one. Every number here is inherited from that
@@ -136,6 +133,13 @@ VALUES
   ('arambagh-fine-print', 'Arambagh Fine Print',
    '{"finishes":["matte","gloss","softtouch","spotuv","foil","emboss"]}'::jsonb, 7, 100, true)
 ON CONFLICT (slug) DO NOTHING;
+
+-- Backfill AFTER the seed, not before it. Running it first matched against an
+-- empty `presses` table, so every historical order kept a NULL `press_id`
+-- while looking like a migration that had done its job. Idempotent, so
+-- re-running this migration repairs a database that took the old ordering.
+UPDATE orders o SET press_id = p.id
+  FROM presses p WHERE o.press_id IS NULL AND o.press = p.name;
 
 -- The multipliers the order screen applies today, recorded as what they are:
 -- unvalidated placeholders scaling an unvalidated base cost.

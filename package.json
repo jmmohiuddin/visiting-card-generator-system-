@@ -3,14 +3,15 @@
   "version": "1.0.0",
   "private": true,
   "type": "module",
-  "description": "CARDWORKS — a constraint-based visiting card engine for Bangladesh",
+  "description": "CARDWORKS \u2014 a constraint-based visiting card engine for Bangladesh",
   "scripts": {
-    "test": "node cardworks-engine.test.cjs; e=$?; for f in tests/*.test.mjs; do printf '\\n▸ %s\\n' \"$f\"; node \"$f\" || e=1; done; exit $e",
+    "test": "node cardworks-engine.test.cjs; e=$?; for f in tests/*.test.mjs; do printf '\\n\u25b8 %s\\n' \"$f\"; node \"$f\" || e=1; done; exit $e",
     "dev": "netlify dev",
     "db:schema": "psql \"$DATABASE_URL\" -v ON_ERROR_STOP=1 -f db/schema.sql",
-    "db:migrate": "for f in db/migrations/*.sql; do echo \"▸ $f\"; psql \"$DATABASE_URL\" -v ON_ERROR_STOP=1 -f \"$f\" || exit 1; done",
+    "db:migrate": "for f in db/migrations/*.sql; do echo \"\u25b8 $f\"; psql \"$DATABASE_URL\" -v ON_ERROR_STOP=1 -f \"$f\" || exit 1; done",
     "db:setup": "npm run db:schema && npm run db:migrate",
-    "fonts:vendor": "node lib/pdf/vendor-fonts.mjs assets/fonts"
+    "fonts:vendor": "node lib/pdf/vendor-fonts.mjs assets/fonts",
+    "test:deploy": "env -u DATABASE_URL CARDWORKS_ALLOW_NO_PG=1 npm test"
   },
   "dependencies": {
     "@neondatabase/serverless": "^0.10.4"

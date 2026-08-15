@@ -453,10 +453,27 @@ if (!live) {
   /* Loudly, and as a failure of the section rather than a silent skip: the
      whole point of putting these guarantees in the schema is that they do not
      depend on application code keeping them, and a run that never checked them
-     has not checked them. */
-  ok('a local Postgres is reachable for the schema guarantees', false,
-     `no server at ${pgBase} — start Postgres 16 or set CARDWORKS_TEST_PG`);
-  ok('7 and 8 could not run', false, 'skipped for want of a database');
+     has not checked them.
+
+     CARDWORKS_ALLOW_NO_PG exists for exactly one caller: the Netlify build,
+     whose container cannot run Postgres at all. There the choice is not
+     between checking and not checking, it is between an unbuildable site and
+     a deploy that says plainly what it did not verify — so it still shouts,
+     it just does not fail the build. Every other environment, including CI
+     (.github/workflows/test.yml runs a real Postgres 16 service), keeps the
+     hard failure, which is where these guarantees are actually enforced. */
+  if (process.env.CARDWORKS_ALLOW_NO_PG === '1') {
+    console.log('\n' + '!'.repeat(58));
+    console.log('  SCHEMA GUARANTEES NOT VERIFIED IN THIS ENVIRONMENT');
+    console.log(`  no Postgres at ${pgBase}`);
+    console.log('  sections 7 and 8 did not run. They are enforced in CI, and');
+    console.log('  a release is not verified until a run with a database is green.');
+    console.log('!'.repeat(58) + '\n');
+  } else {
+    ok('a local Postgres is reachable for the schema guarantees', false,
+       `no server at ${pgBase} — start Postgres 16 or set CARDWORKS_TEST_PG`);
+    ok('7 and 8 could not run', false, 'skipped for want of a database');
+  }
 } else {
   /* The database is named after this process, so two suites running at once
      cannot drop each other's — a fixed name is a cross-run race, and one cost

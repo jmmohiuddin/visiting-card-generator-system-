@@ -1,0 +1,55 @@
+# The full suite, against a real Postgres.
+#
+# The Netlify build runs `npm run test:deploy`, which cannot start a database
+# and says so loudly. This is where the schema guarantees are actually
+# enforced: every push and every pull request, with Postgres 16 running as a
+# service, so `tests/entitlements.test.mjs` sections 7 and 8 execute for real.
+#
+# Three other suites — library, metrics, pinning — also run more assertions
+# when a database is present. Without one they pass with fewer, which is the
+# quieter version of the same problem, and the reason this workflow exists
+# rather than trusting a green local run.
+name: tests
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: postgres
+        ports: ['5432:5432']
+        options: >-
+          --health-cmd "pg_isready -U postgres"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 10
+
+    env:
+      # The suite creates and drops its own per-process database from this
+      # base URL, so it needs an account that may CREATE DATABASE.
+      CARDWORKS_TEST_PG: postgresql://postgres:postgres@127.0.0.1:5432/postgres
+
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+
+      - run: npm ci
+
+      - name: postgresql-client
+        run: sudo apt-get update && sudo apt-get install -y postgresql-client
+
+      - name: Full suite, with a database
+        run: npm test
