@@ -42,10 +42,12 @@ jobs:
       # at all. The first CI run passed while library and metrics were
       # skipping — 166 and 64 assertions against 183 and 108 locally — which
       # is exactly the silent under-run this workflow exists to prevent.
-      # Each suite creates and drops its own database, so the role needs
-      # CREATEDB.
+      # CARDWORKS_TEST_DATABASE_URL is deliberately NOT set. metrics treats it
+      # as "this database already exists and is migrated" and skips creating
+      # one — pointing it at a database that did not exist is what kept that
+      # suite at 64 assertions instead of 108. Left unset, it builds and drops
+      # its own, which is what the `runner` role below is for.
       CARDWORKS_TEST_PG: postgresql://postgres:postgres@127.0.0.1:5432/postgres
-      CARDWORKS_TEST_DATABASE_URL: postgres://postgres:postgres@127.0.0.1:5432/cardworks_metrics_test
       PGHOST: 127.0.0.1
       PGPASSWORD: postgres
 
