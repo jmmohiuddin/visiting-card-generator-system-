@@ -5,3 +5,6 @@
 .netlify/
 node_modules/
 .DS_Store
+
+# Playwright MCP console dumps — debug output, not source
+.playwright-mcp/

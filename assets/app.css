@@ -1,6 +1,13 @@
 /* CARDWORKS — Modernist design system, lifted verbatim out of index.html.
    Splitting the stylesheet out of the document is what lets the mobile-first
-   shell be worked on without touching markup or engine code. */
+   shell be worked on without touching markup or engine code.
+
+   Every layout rule below is written phone-first and widened with min-width
+   queries. The product's real device is a mid-range Android phone on metered
+   data (Master PRD §3.1), so the narrow case is the one that is stated plainly
+   and the wide case is the exception that has to earn its query. The previous
+   pass had this the other way round — a three-column desktop grid unwound by
+   max-width overrides — which is how content came to overlap below 1100px. */
 /* ══════════════════════════════════════════════════════════════════════════
    MODERNIST — inherited from the CARDWORKS prototype design system.
    Tokens are the prototype's own: same ground, same ink, same accent, same
@@ -48,8 +55,19 @@
   --shadow-lg:0 12px 32px color-mix(in srgb,#2d2b2b 22%,transparent);
 
   --frame:1440px;
-  --nav-h:62px;
+
+  /* The header is 48px on a phone (Wireframing §4) and only grows once there
+     is width to spare. Everything that measures against the viewport reads
+     this token rather than a literal, so the two never drift. */
+  --nav-h:48px;
+  /* Height reserved under a screen that anchors its primary action to the
+     thumb zone. Kept as a token because both the bar and the reservation
+     have to change together or the last control sits under the bar. */
+  --bar-h:64px;
+  /* Fingers are not cursors. 44px is the floor for anything tappable. */
+  --tap:44px;
 }
+@media(min-width:900px){ :root{ --nav-h:62px } }
 
 *,*::before,*::after{box-sizing:border-box}
 *{margin:0;padding:0}
@@ -94,14 +112,56 @@ p{max-width:68ch}
 .frame{max-width:var(--frame);margin:0 auto;min-height:100vh;background:var(--color-bg);
   border-left:var(--rule);border-right:var(--rule)}
 @media(max-width:1460px){.frame{border-left:0;border-right:0}}
-.nav{display:flex;align-items:center;gap:var(--space-4);padding:0 var(--space-6);
+/* The header never wraps. Ten nav destinations cannot fit beside a wordmark
+   on a 320px screen, so below the desktop breakpoint they are not squeezed —
+   they move behind the overflow control and the header keeps its one job:
+   where am I, how do I go back, what else is there. */
+.nav{display:flex;align-items:center;gap:var(--space-3);padding:0 var(--space-2);
   height:var(--nav-h);border-bottom:var(--rule);background:var(--color-bg);
-  position:sticky;top:0;z-index:20;flex-wrap:wrap}
-.brand{font-family:var(--font-heading);font-weight:800;font-size:15px;letter-spacing:.2em;
+  position:sticky;top:0;z-index:30;flex-wrap:nowrap}
+.brand{font-family:var(--font-heading);font-weight:800;font-size:13px;letter-spacing:.18em;
   text-transform:uppercase;white-space:nowrap}
 .crumb{font-size:10.5px;letter-spacing:.18em;text-transform:uppercase;color:var(--muted);
-  margin-right:auto;font-weight:600;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-.navlinks{display:flex;gap:0;flex-wrap:wrap}
+  font-weight:600;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.navlinks{display:flex;gap:0}
+
+/* Header controls are square taps, not text buttons: the icon is 20px but the
+   target is the full 44px the finger needs. */
+.iconbtn{width:var(--tap);height:var(--tap);flex:none;display:inline-flex;align-items:center;
+  justify-content:center;border:0;background:transparent;color:var(--color-text);cursor:pointer;
+  border-radius:var(--radius);transition:background .14s ease}
+.iconbtn:hover{background:color-mix(in srgb,var(--color-text) 8%,transparent)}
+.iconbtn svg{display:block}
+.navtoggle{margin-left:auto}
+
+/* Closed, the overflow menu is a panel hanging off the sticky header. Opened,
+   it is a full-width list of 48px rows — the same destinations the desktop
+   header shows inline, in the same order, with room to hit them. */
+.navmenu{position:absolute;top:100%;left:0;right:0;background:var(--color-bg);
+  border-bottom:var(--rule);box-shadow:var(--shadow-md);display:none;
+  max-height:calc(100dvh - var(--nav-h));overflow:auto}
+.navmenu[data-open]{display:block}
+.navmenu .navlinks{flex-direction:column}
+.navmenu .btn-ghost{justify-content:flex-start;width:100%;min-height:48px;font-size:12.5px;
+  color:var(--color-text);border-bottom:1px solid var(--hair);padding-left:var(--space-6)}
+.navmenu .btn-ghost[aria-current="true"]{color:var(--color-accent)}
+
+@media(min-width:900px){
+  .nav{padding:0 var(--space-6);gap:var(--space-4)}
+  .brand{font-size:15px;letter-spacing:.2em}
+  .navback,.navtoggle{display:none}
+  .navmenu{position:static;display:block;border-bottom:0;box-shadow:none;overflow:visible;
+    max-height:none;margin-left:auto}
+  .navmenu .navlinks{flex-direction:row}
+  .navmenu .btn-ghost{width:auto;min-height:0;border-bottom:0;padding:9px 15px;
+    color:var(--muted);font-size:11.5px}
+}
+/* The crumb repeats what the stepper and stage bar already say, and on a
+   phone it is the one header element with nothing to anchor it. It stays in
+   the accessibility tree — screen-reader users have no stage bar to read. */
+@media(max-width:699px){
+  .crumb{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap}
+}
 
 /* ── Buttons ──────────────────────────────────────────────────────────── */
 .btn{font-family:var(--font-heading);font-weight:700;font-size:11.5px;letter-spacing:.08em;
@@ -120,6 +180,16 @@ p{max-width:68ch}
 .btn-ghost:hover{background:transparent;color:var(--color-accent)}
 .btn-ghost[aria-current="true"]{color:var(--color-accent)}
 .btn-lg{font-size:12.5px;padding:13px 22px}
+
+/* Below the desktop breakpoint every control is sized for a thumb rather than
+   a cursor. The type stays where it was; only the box grows, so the density
+   of the Modernist grid is unchanged on the widths that were already fine. */
+@media(max-width:899px){
+  .btn,.chip,.seg > button{min-height:var(--tap)}
+  .chip{display:inline-flex;align-items:center}
+  .input,select.input{min-height:var(--tap)}
+  .railitem,.stagebar button{min-height:var(--tap)}
+}
 
 /* ── Segmented control — the system's own selection language ──────────── */
 .seg{display:inline-flex;border:1px solid var(--divider);background:transparent}
@@ -152,11 +222,10 @@ p{max-width:68ch}
 .input::placeholder{color:var(--muted)}
 textarea.input{resize:vertical;font-family:var(--font-mono);font-size:12px;line-height:1.6}
 input[type=file].input{padding:8px;font-size:12px}
-.grid2{display:grid;grid-template-columns:1fr 1fr;gap:var(--space-4)}
-@media(max-width:640px){.grid2{grid-template-columns:1fr}}
+.grid2{display:grid;grid-template-columns:minmax(0,1fr);gap:var(--space-4)}
+@media(min-width:640px){.grid2{grid-template-columns:minmax(0,1fr) minmax(0,1fr)}}
 
 /* ── Rail ─────────────────────────────────────────────────────────────── */
-.rail{display:flex;flex-direction:column;border-right:var(--rule)}
 .railhd{padding:var(--space-4) var(--space-6);border-bottom:var(--rule)}
 .railitem{display:flex;gap:var(--space-3);align-items:center;padding:12px var(--space-6);
   border:0;border-bottom:1px solid var(--hair);background:transparent;cursor:pointer;
@@ -172,17 +241,28 @@ input[type=file].input{padding:8px;font-size:12px}
 .railitem[aria-current="step"] .railmark{color:var(--color-bg)}
 
 /* ── Tile grid — hairlines form one continuous grid, no floating cards ── */
-.tiles{display:grid;grid-template-columns:repeat(3,1fr);border-top:1px solid var(--hair)}
-@media(max-width:1100px){.tiles{grid-template-columns:repeat(2,1fr)}}
-@media(max-width:680px){.tiles{grid-template-columns:1fr}}
-.tile{display:flex;flex-direction:column;gap:var(--space-3);padding:var(--space-6);
+/* Six concepts are two-up on a phone (Wireframing §5.5). One-up would make
+   comparison a scroll rather than a glance, and comparison is the whole
+   point of returning six. Tile sets that are prose rather than picture take
+   `.tiles-wide` and stay single-column until there is room to read them. */
+.tiles{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));border-top:1px solid var(--hair)}
+.tile{display:flex;flex-direction:column;gap:var(--space-3);padding:var(--space-4);
   border-right:1px solid var(--hair);border-bottom:1px solid var(--hair);
   background:transparent;text-align:left;cursor:pointer;color:inherit;font:inherit;
-  transition:background .16s ease}
-.tiles > .tile:nth-child(3n){border-right:0}
-@media(max-width:1100px){.tiles > .tile:nth-child(3n){border-right:1px solid var(--hair)}
-  .tiles > .tile:nth-child(2n){border-right:0}}
-@media(max-width:680px){.tiles > .tile{border-right:0}}
+  min-width:0;transition:background .16s ease}
+.tiles > .tile:nth-child(2n){border-right:0}
+.tiles-wide{grid-template-columns:minmax(0,1fr)}
+.tiles-wide > .tile{border-right:0}
+@media(min-width:720px){
+  .tiles-wide{grid-template-columns:repeat(2,minmax(0,1fr))}
+  .tiles-wide > .tile:nth-child(2n-1){border-right:1px solid var(--hair)}
+}
+@media(min-width:1100px){
+  .tiles,.tiles-wide{grid-template-columns:repeat(3,minmax(0,1fr))}
+  .tile{padding:var(--space-6)}
+  .tiles > .tile:nth-child(2n),.tiles-wide > .tile{border-right:1px solid var(--hair)}
+  .tiles > .tile:nth-child(3n),.tiles-wide > .tile:nth-child(3n){border-right:0}
+}
 .tile:hover{background:color-mix(in srgb,var(--color-text) 4%,transparent)}
 .tile[aria-pressed="true"]{background:var(--color-accent-100)}
 .tile[aria-pressed="true"] .tiletitle{color:var(--color-accent-800)}
@@ -218,31 +298,53 @@ input[type=file].input{padding:8px;font-size:12px}
   word-break:break-word}
 
 /* ── Layout scaffolds ─────────────────────────────────────────────────── */
-.cols{display:grid;grid-template-columns:290px minmax(0,1fr) 300px;min-height:calc(100vh - var(--nav-h))}
-.cols-2{display:grid;grid-template-columns:minmax(0,1fr) 380px;min-height:calc(100vh - var(--nav-h))}
-.pane{padding:var(--space-8) var(--space-6);min-width:0}
-.pane-r{border-left:var(--rule)}
-.pane-l{border-right:var(--rule)}
+/* One column is the base case, not the fallback. `.cols` and `.cols-2` are
+   plain stacks until there is width for a second and a third; `minmax(0,1fr)`
+   on every track is what stops a long mono value or a wide preview from
+   forcing the whole grid past the viewport. */
+.cols,.cols-2{display:grid;grid-template-columns:minmax(0,1fr);
+  min-height:calc(100dvh - var(--nav-h))}
+.pane{padding:var(--space-6) var(--space-4);min-width:0}
+.pane-r,.pane-l{border-top:var(--rule)}
 .stack{display:flex;flex-direction:column;gap:var(--space-6)}
 .row{display:flex;gap:var(--space-3);align-items:center;flex-wrap:wrap}
 .spread{display:flex;gap:var(--space-4);align-items:center;justify-content:space-between;flex-wrap:wrap}
-.sectionhd{display:flex;align-items:baseline;justify-content:space-between;gap:var(--space-4);
-  padding:var(--space-4) var(--space-6);border-bottom:var(--rule);flex-wrap:wrap}
-.wide{padding:var(--space-6)}
-@media(max-width:1080px){
-  .cols,.cols-2{grid-template-columns:minmax(0,1fr)}
-  .pane-r,.pane-l{border-left:0;border-right:0;border-top:var(--rule)}
-  /* Seven stacked rail rows push the form a full screen down on a phone.
-     The rail becomes a horizontal stepper: same information, same order,
-     no scrolling before you can type. */
-  .rail{border-right:0;border-bottom:var(--rule);flex-direction:row;align-items:stretch}
-  .rail .railhd{display:none}
-  #rail{display:flex;overflow-x:auto;scrollbar-width:none;flex:1}
-  #rail::-webkit-scrollbar{display:none}
-  .railitem{width:auto;white-space:nowrap;border-bottom:0;
-    border-right:1px solid var(--hair);padding:12px 16px;scroll-snap-align:start}
-  .railitem .railmark{margin-left:7px}
-  .pane{padding:var(--space-6) var(--space-4)}
+.sectionhd{display:flex;align-items:baseline;justify-content:space-between;gap:var(--space-3);
+  padding:var(--space-4);border-bottom:var(--rule);flex-wrap:wrap}
+.wide{padding:var(--space-6) var(--space-4)}
+
+/* Seven stacked rail rows push the form a full screen down on a phone. The
+   rail is a horizontal stepper until it has a column of its own: same
+   information, same order, no scrolling before you can type. */
+.rail{display:flex;flex-direction:row;align-items:stretch;border-bottom:var(--rule)}
+.rail .railhd{display:none}
+#rail{display:flex;overflow-x:auto;scrollbar-width:none;flex:1;scroll-snap-type:x proximity}
+#rail::-webkit-scrollbar{display:none}
+.railitem{width:auto;white-space:nowrap;border-bottom:0;border-right:1px solid var(--hair);
+  padding:12px 16px;scroll-snap-align:start}
+.railitem .railmark{margin-left:7px}
+
+@media(min-width:900px){
+  .cols-2{grid-template-columns:minmax(0,1fr) minmax(0,380px)}
+  .pane{padding:var(--space-8) var(--space-6)}
+  /* The rule between panes is a left border only once the pane is genuinely
+     beside something. `.cols` is still one column at this width, so its
+     inspector keeps the top rule that separates stacked blocks. */
+  .cols-2 > .pane-r{border-top:0;border-left:var(--rule)}
+  .cols-2 > .pane-l{border-top:0;border-right:var(--rule)}
+  .sectionhd{padding:var(--space-4) var(--space-6);gap:var(--space-4)}
+  .wide{padding:var(--space-6)}
+}
+@media(min-width:1200px){
+  .cols{grid-template-columns:minmax(0,290px) minmax(0,1fr) minmax(0,300px)}
+  .cols > .pane-r{border-top:0;border-left:var(--rule)}
+  .cols > .pane-l{border-top:0;border-right:var(--rule)}
+  .rail{flex-direction:column;border-bottom:0;border-right:var(--rule)}
+  .rail .railhd{display:block}
+  #rail{display:block;overflow-x:visible;flex:none}
+  .railitem{width:100%;white-space:normal;border-right:0;border-bottom:1px solid var(--hair);
+    padding:12px var(--space-6)}
+  .railitem .railmark{margin-left:auto}
 }
 
 /* ── The one authored motion moment: composition resolving ────────────── */
@@ -257,7 +359,11 @@ input[type=file].input{padding:8px;font-size:12px}
     transition-duration:.001ms!important}
 }
 
-.stagebar{display:flex;border-bottom:var(--rule);overflow-x:auto;scrollbar-width:none}
+/* The stage bar rides under the header. On a phone the crumb is gone and this
+   is the only thing that answers "where am I in the flow", so it must not
+   scroll away with the content. */
+.stagebar{display:flex;border-bottom:var(--rule);overflow-x:auto;scrollbar-width:none;
+  position:sticky;top:var(--nav-h);z-index:19;background:var(--color-bg)}
 .stagebar::-webkit-scrollbar{display:none}
 .stagebar button{display:flex;gap:9px;align-items:center;white-space:nowrap;padding:11px 18px;
   border:0;border-right:1px solid var(--hair);background:transparent;cursor:pointer;
@@ -267,11 +373,18 @@ input[type=file].input{padding:8px;font-size:12px}
 .stagebar button[aria-current="step"] .railnum{color:var(--color-bg)}
 .stagebar button:disabled{color:var(--faint);cursor:not-allowed}
 .stagebar button:disabled .railnum{color:var(--faint)}
-.cmp{display:grid;grid-template-columns:repeat(3,1fr);border-top:1px solid var(--hair)}
-@media(max-width:1100px){.cmp{grid-template-columns:repeat(2,1fr)}}
-@media(max-width:680px){.cmp{grid-template-columns:1fr}}
-.cmp > div{padding:var(--space-6);border-right:1px solid var(--hair);border-bottom:1px solid var(--hair)}
-.cmp > div:nth-child(3n){border-right:0}
+.cmp{display:grid;grid-template-columns:minmax(0,1fr);border-top:1px solid var(--hair)}
+.cmp > div{padding:var(--space-4);border-bottom:1px solid var(--hair);min-width:0}
+@media(min-width:680px){
+  .cmp{grid-template-columns:repeat(2,minmax(0,1fr))}
+  .cmp > div{padding:var(--space-6);border-right:1px solid var(--hair)}
+  .cmp > div:nth-child(2n){border-right:0}
+}
+@media(min-width:1100px){
+  .cmp{grid-template-columns:repeat(3,minmax(0,1fr))}
+  .cmp > div:nth-child(2n){border-right:1px solid var(--hair)}
+  .cmp > div:nth-child(3n){border-right:0}
+}
 .sr{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap}
 .empty{padding:var(--space-8) var(--space-6);color:var(--muted);font-size:14px;max-width:56ch}
 .pill{display:inline-flex;align-items:center;gap:6px;font-size:10.5px;letter-spacing:.11em;
@@ -282,3 +395,121 @@ input[type=file].input{padding:8px;font-size:12px}
 .pre{font-family:var(--font-mono);font-size:10.5px;line-height:1.65;background:var(--color-bg);
   border:1px solid var(--hair);padding:var(--space-3);overflow:auto;max-height:300px;
   white-space:pre-wrap;word-break:break-word;color:var(--muted)}
+
+/* ══════════════════════════════════════════════════════════════════════════
+   THE THUMB ZONE — Wireframing §4
+   --------------------------------------------------------------------------
+   `bottomBar()` in ui-shell.js emits this class, and the brief and detail
+   screens carry one in the markup. On a phone it is pinned to the bottom of
+   the viewport, because a primary action that has to be scrolled to is a
+   primary action the user has to hunt for. On a wide screen there is no thumb
+   zone to speak of, so it settles into the flow and merely sticks.
+   ══════════════════════════════════════════════════════════════════════ */
+.actionbar{display:flex;gap:var(--space-3);align-items:center;flex-wrap:wrap;
+  position:sticky;bottom:0;z-index:10;background:var(--color-bg);
+  border-top:1px solid var(--divider);padding:var(--space-3) 0;margin-top:auto}
+.actionbar .micro{margin-right:auto}
+@media(max-width:899px){
+  .actionbar{position:fixed;left:0;right:0;bottom:0;z-index:25;gap:var(--space-2);
+    border-top:var(--rule);margin:0;
+    padding:var(--space-2) var(--space-4);
+    padding-bottom:calc(var(--space-2) + env(safe-area-inset-bottom,0px))}
+  /* `min-width:0` is what lets three actions share 320px instead of pushing
+     the third one off the screen; the bar wraps rather than overflows if a
+     screen ever asks for more than its width can carry. */
+  .actionbar > .btn{flex:1 1 auto;min-width:0;justify-content:center;min-height:48px;
+    padding-left:10px;padding-right:10px}
+  .actionbar > .btn-primary{flex:2 1 auto}
+  /* A hint reading "you can come back to any step" is worth a line of a
+     desktop bar and not worth a third of a phone's. */
+  .actionbar .micro{display:none}
+  /* The bar covers the foot of the page, so a screen that has one owes its
+     own content that much clearance or the last control sits underneath it.
+     The shell script in index.html keeps `--bar-h` equal to the height the
+     bar actually measures, because a bar with four actions wraps to two rows
+     on a narrow phone and a constant would be wrong exactly there. */
+  [data-screen]:has(.actionbar){padding-bottom:calc(var(--bar-h) + var(--space-4))}
+}
+
+/* ══════════════════════════════════════════════════════════════════════════
+   THE BOTTOM SHEET — Wireframing §4
+   --------------------------------------------------------------------------
+   The right-hand inspector is secondary by definition: it explains what the
+   main column is doing. On a phone it becomes a sheet the user pulls up when
+   they want the explanation, rather than a column that either disappears or
+   overlaps. At the desktop breakpoint it is simply the third column again and
+   the control that opens it has nothing to do, so it is not rendered.
+   ══════════════════════════════════════════════════════════════════════ */
+.sheettab{display:flex;align-items:center;justify-content:space-between;gap:var(--space-3);
+  width:100%;min-height:var(--tap);padding:11px var(--space-3);cursor:pointer;
+  border:1px solid var(--divider);background:transparent;color:var(--color-text);
+  font-family:var(--font-heading);font-weight:700;font-size:11px;letter-spacing:.09em;
+  text-transform:uppercase;border-radius:var(--radius)}
+.sheettab:hover{background:color-mix(in srgb,var(--color-text) 8%,transparent)}
+.sheettab::after{content:"";width:8px;height:8px;flex:none;border-right:2px solid currentColor;
+  border-top:2px solid currentColor;transform:rotate(-45deg) translate(-2px,2px)}
+.sheethd{display:none}
+.pane > .sheettab{margin-bottom:var(--space-4)}
+/* The pane the tab opens carries its own heading for the desktop column, and
+   on a phone the sheet's header says the same thing. Saying it twice reads as
+   a mistake, so the in-flow one steps aside. */
+@media(max-width:899px){ .sheet-inline-hd{display:none} }
+.scrim{position:fixed;inset:0;z-index:40;background:color-mix(in srgb,var(--color-text) 42%,transparent);
+  border:0;cursor:pointer}
+.scrim[hidden]{display:none}
+
+@media(max-width:899px){
+  .sheet{position:fixed;left:0;right:0;bottom:0;z-index:45;
+    max-height:82dvh;overflow-y:auto;overscroll-behavior:contain;
+    background:var(--color-bg);border-top:var(--rule);box-shadow:var(--shadow-lg);
+    padding-bottom:calc(var(--space-6) + env(safe-area-inset-bottom,0px));
+    transform:translateY(100%);visibility:hidden;
+    /* Visibility is what keeps a closed sheet out of the tab order. It has to
+       flip the instant the sheet opens — focus moves into the sheet on the
+       same tick — but wait for the slide to finish on the way out. */
+    transition:transform .22s cubic-bezier(.16,1,.3,1),visibility 0s linear .22s}
+  .sheet[data-open]{transform:none;visibility:visible;
+    transition:transform .22s cubic-bezier(.16,1,.3,1),visibility 0s}
+  /* The sheet's own header is the only handle a phone user gets: it names
+     what they opened and carries the control that closes it again. */
+  .sheethd{display:flex;align-items:center;justify-content:space-between;gap:var(--space-3);
+    position:sticky;top:0;z-index:1;background:var(--color-bg);
+    border-bottom:1px solid var(--divider);padding:var(--space-2) var(--space-2) var(--space-2) var(--space-4);
+    margin:calc(var(--space-6) * -1) calc(var(--space-4) * -1) var(--space-4)}
+}
+@media(min-width:900px){
+  .sheettab{display:none}
+  .scrim{display:none}
+}
+
+/* ══════════════════════════════════════════════════════════════════════════
+   ASYNC STATES — one loading block, one failure block, one offline block
+   --------------------------------------------------------------------------
+   ui-shell.js emits all three, so every screen's async behaviour reads the
+   same. They are drawn as a rule and a left mark rather than a coloured card:
+   the system has no filled panels and adding one for errors alone would make
+   failure the loudest thing on the page.
+   ══════════════════════════════════════════════════════════════════════ */
+.state{display:flex;flex-direction:column;gap:6px;align-items:flex-start;
+  padding:var(--space-3) var(--space-4);font-size:13.5px;max-width:56ch;
+  border:1px solid var(--hair);border-left:3px solid var(--divider);margin:var(--space-3) 0}
+.state .note{display:block;font-size:12px;color:var(--muted)}
+.state .btn{margin-top:var(--space-1);min-height:var(--tap)}
+.state-pending{flex-direction:row;align-items:center;gap:10px;color:var(--muted)}
+.state-error{border-left-color:var(--color-accent);color:var(--color-accent-800);
+  background:var(--color-accent-100);border-color:var(--color-accent-200)}
+.state-error .note{color:var(--color-accent-800);opacity:.85}
+.state-offline{border-left-color:var(--warn);color:var(--warn)}
+
+/* A square that turns in eight steps, not a spinning circle. The system has no
+   radius anywhere else and a borrowed spinner is exactly the tell the Master
+   PRD asks this interface not to have. */
+@keyframes cw-turn{to{transform:rotate(360deg)}}
+.spin{width:11px;height:11px;flex:none;display:block;
+  border:2px solid currentColor;border-right-color:transparent;
+  animation:cw-turn 1.2s steps(8,end) infinite}
+
+/* Anything waiting on the network says so and refuses input while it waits,
+   so a second tap cannot become a second order. */
+[aria-busy="true"]{cursor:progress}
+[data-pending-when][aria-busy="true"]{opacity:.5}

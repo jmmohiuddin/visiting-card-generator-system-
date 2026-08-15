@@ -13,10 +13,25 @@
 <body>
 <div class="frame">
 
+<!-- 48px header, always present (Wireframing §4): back, wordmark, overflow.
+     The ten destinations ui-shell.js writes into #navlinks stay exactly where
+     that code expects them; on a phone the element they live in is a panel
+     hanging off the header instead of a row inside it. -->
 <nav class="nav">
+  <button type="button" class="iconbtn navback" id="b_navback" aria-label="Back">
+    <svg width="17" height="17" viewBox="0 0 16 16" fill="none" stroke="currentColor"
+      stroke-width="1.5" stroke-linecap="square" aria-hidden="true"><path d="M14 8H3M7 4 3 8l4 4"/></svg>
+  </button>
   <span class="brand">Cardworks</span>
   <span class="crumb" id="crumb">Brief</span>
-  <div class="navlinks" id="navlinks"></div>
+  <button type="button" class="iconbtn navtoggle" id="b_navtoggle"
+    aria-label="More" aria-expanded="false" aria-controls="navmenu">
+    <svg width="17" height="17" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true"><circle
+      cx="8" cy="3" r="1.4"/><circle cx="8" cy="8" r="1.4"/><circle cx="8" cy="13" r="1.4"/></svg>
+  </button>
+  <div class="navmenu" id="navmenu">
+    <div class="navlinks" id="navlinks"></div>
+  </div>
 </nav>
 
 <div id="stagebar" class="stagebar"></div>
@@ -36,6 +51,9 @@
   </div>
 
   <div class="pane">
+    <button type="button" class="sheettab" data-sheet-open="sheet_brief"
+      aria-expanded="false" aria-controls="sheet_brief">What this implies</button>
+
     <!-- Step 1 -->
     <div data-step="0" class="stack">
       <div>
@@ -86,8 +104,8 @@
       </div>
       <hr class="hr">
       <div class="field" style="max-width:460px">
-        <label for="i_logo">Upload SVG, PNG or JPG</label>
-        <input type="file" class="input" id="i_logo" accept=".svg,image/svg+xml,image/png,image/jpeg">
+        <label for="i_logo">Upload SVG, PDF, EPS, PNG or JPG</label>
+        <input type="file" class="input" id="i_logo" accept=".svg,.pdf,.eps,.ai,image/svg+xml,application/pdf,application/postscript,image/png,image/jpeg">
       </div>
       <div id="logoReport"></div>
     </div>
@@ -157,18 +175,25 @@
     </div>
 
     <hr class="hr">
-    <div class="spread">
+    <!-- Same class ui-shell.js's bottomBar() emits, because this is the same
+         thing: the brief's primary action, pinned to the thumb zone. -->
+    <div class="actionbar" role="group" aria-label="Primary actions">
       <button class="btn" id="b_prev">Back</button>
-      <div class="row">
-        <span class="micro" id="stepHint"></span>
-        <button class="btn btn-primary btn-lg" id="b_next">Continue</button>
-      </div>
+      <span class="micro" id="stepHint"></span>
+      <button class="btn btn-primary btn-lg" id="b_next">Continue</button>
     </div>
   </div>
 
-  <div class="pane pane-r stack">
+  <div class="pane pane-r stack sheet" id="sheet_brief" role="group" aria-labelledby="sheet_brief_t">
+    <div class="sheethd">
+      <h6 id="sheet_brief_t">What this implies</h6>
+      <button type="button" class="iconbtn" data-sheet-close aria-label="Close">
+        <svg width="17" height="17" viewBox="0 0 16 16" fill="none" stroke="currentColor"
+          stroke-width="1.5" stroke-linecap="square" aria-hidden="true"><path d="M4 4l8 8M12 4l-8 8"/></svg>
+      </button>
+    </div>
     <div>
-      <h6>What this implies</h6>
+      <h6 class="sheet-inline-hd">What this implies</h6>
       <p class="lede" style="font-size:12.5px">Derived from the brief as you type. Nothing is chosen yet.</p>
     </div>
     <dl class="kv" id="implies"></dl>
@@ -214,6 +239,12 @@
 </section>
 
 <!-- ══════════════════ DETAIL ══════════════════ -->
+<!-- ui-concepts.js replaces the innerHTML of this section, of `concepts` and
+     of `customise` on every draw, and emits its own `bottomBar()`. What is
+     written here is the pre-script baseline: it is what a reader sees before
+     the first paint, and it is laid out to the same mobile rules so that
+     moment is not a broken desktop page. The ids stay because ui-init.js
+     binds them once at load, before the first draw replaces them. -->
 <section data-screen="detail">
  <div class="cols-2">
   <div class="pane stack">
@@ -231,23 +262,34 @@
     </div>
     <div id="detailCard" class="stack"></div>
     <dl class="kv" id="detailKv"></dl>
+    <button type="button" class="sheettab" data-sheet-open="sheet_detail"
+      aria-expanded="false" aria-controls="sheet_detail">Why this one, and its score</button>
+    <!-- The three ways forward from a concept. They were in the right-hand
+         column, which on a phone put them below a full-height card preview;
+         they belong in the thumb zone, and the explanation belongs in the
+         sheet, not the other way round. -->
+    <div class="actionbar" role="group" aria-label="Primary actions">
+      <button class="btn" id="b_validate">Validate</button>
+      <button class="btn" id="b_toexport">Export</button>
+      <button class="btn btn-primary" id="b_tocustomise">Customise</button>
+    </div>
   </div>
 
-  <div class="pane pane-r stack">
+  <div class="pane pane-r stack sheet" id="sheet_detail" role="group" aria-labelledby="sheet_detail_t">
+    <div class="sheethd">
+      <h6 id="sheet_detail_t">Why this one</h6>
+      <button type="button" class="iconbtn" data-sheet-close aria-label="Close">
+        <svg width="17" height="17" viewBox="0 0 16 16" fill="none" stroke="currentColor"
+          stroke-width="1.5" stroke-linecap="square" aria-hidden="true"><path d="M4 4l8 8M12 4l-8 8"/></svg>
+      </button>
+    </div>
     <div>
-      <h6>Why this one</h6>
+      <h6 class="sheet-inline-hd">Why this one</h6>
       <p id="why" style="margin-top:10px;font-size:14px"></p>
     </div>
     <div>
       <h6 style="margin-bottom:10px">Score</h6>
       <div id="score"></div>
-    </div>
-    <hr class="hair">
-    <div class="row">
-      <button class="btn btn-primary" id="b_tocustomise">Customise</button>
-      <button class="btn" id="b_validate">Validate</button>
-      <button class="btn" id="b_toexport">Export or order</button>
-    </div>
     </div>
   </div>
  </div>
@@ -266,13 +308,22 @@
   <div class="cols-2">
     <div class="pane stack">
       <div id="custCard"></div>
+      <button type="button" class="sheettab" data-sheet-open="sheet_cust"
+        aria-expanded="false" aria-controls="sheet_cust">Change type, colour or layout</button>
       <div class="field"><label for="i_instr">Or say it in words</label>
         <input class="input" id="i_instr" placeholder="Make it more premium · নাম বড় করুন"></div>
       <div class="row"><button class="btn btn-primary" id="b_apply">Apply</button></div>
       <div id="instr"></div>
       <p class="lede" style="font-size:12px">The pickers and the text box emit the same closed set of operations. Neither can move an element or set a size; the geometry is always re-composed.</p>
     </div>
-    <div class="pane pane-r stack">
+    <div class="pane pane-r stack sheet" id="sheet_cust" role="group" aria-labelledby="sheet_cust_t">
+      <div class="sheethd">
+        <h6 id="sheet_cust_t">Components</h6>
+        <button type="button" class="iconbtn" data-sheet-close aria-label="Close">
+          <svg width="17" height="17" viewBox="0 0 16 16" fill="none" stroke="currentColor"
+            stroke-width="1.5" stroke-linecap="square" aria-hidden="true"><path d="M4 4l8 8M12 4l-8 8"/></svg>
+        </button>
+      </div>
       <div><span class="lbl" id="lbl_ctype">Typography</span>
         <div class="chips" role="group" aria-labelledby="lbl_ctype" id="altType" style="margin-top:7px"></div></div>
       <div><span class="lbl" id="lbl_ccol">Colour</span>
@@ -427,7 +478,7 @@
     <div class="grid2" id="conflict"></div>
     <hr class="hr">
     <h6 style="margin-bottom:var(--space-4)">Choose one</h6>
-    <div class="tiles" id="resolutions" style="border-top:1px solid var(--hair)"></div>
+    <div class="tiles tiles-wide" id="resolutions" style="border-top:1px solid var(--hair)"></div>
     <p class="lede" style="font-size:12.5px;margin-top:var(--space-4)">Nothing else in your brief changes. This is the only conflict the engine found; everything else composed cleanly.</p>
   </div>
 </section>
@@ -548,11 +599,11 @@
     <div><h2>Plans</h2>
       <span class="micro">Designing is free because the cost sits in printing</span></div>
   </div>
-  <div class="tiles" id="plans" style="grid-template-columns:repeat(4,1fr)"></div>
+  <div class="tiles tiles-wide" id="plans"></div>
   <div class="pane">
     <h6 style="margin-bottom:var(--space-4)">What is included</h6>
     <div id="planRows"></div>
-    <p class="lede" style="font-size:12.5px;margin-top:var(--space-4)">Printing is billed per order at press cost plus margin, on every plan. Foil blocks and letterpress dies are one-off charges that carry over to repeat runs.</p>
+    <p class="lede" style="font-size:12.5px;margin-top:var(--space-4)">Printing is billed per order at press cost plus margin. Foil blocks and letterpress dies are one-off charges that carry over to repeat runs.</p>
   </div>
 </section>
 
@@ -696,8 +747,24 @@
   </div>
 </section>
 
+<!-- ══════════════════ ENHANCE — a card someone already has ══════════════════
+     Upload an existing design and get back one that will actually print.
+     The shell only; everything inside is drawn by assets/ui-enhance.js. -->
+<section data-screen="enhance">
+  <div id="enhanceRoot"></div>
+</section>
+
+<!-- ══════════════════ DESTRUCTURE — take a card apart ══════════════════
+     Decompose an uploaded card into its parts and restyle each one under the
+     same constraints a generated card obeys. Drawn by ui-destructure.js. -->
+<section data-screen="destructure">
+  <div id="destructureRoot"></div>
+</section>
+
 </main>
 </div>
+
+<button type="button" class="scrim" id="scrim" data-sheet-close hidden tabindex="-1" aria-hidden="true"></button>
 
 <script src="/assets/engine.js"></script>
 <script src="/assets/ui-shell.js"></script>
@@ -705,7 +772,130 @@
 <script src="/assets/ui-concepts.js"></script>
 <script src="/assets/ui-validate.js"></script>
 <script src="/assets/ui-order.js"></script>
+<script src="/assets/ui-enhance.js"></script>
+<script src="/assets/ui-destructure.js"></script>
 <script src="/assets/ui-misc.js"></script>
 <script src="/assets/ui-init.js"></script>
+
+<!-- Shell chrome. Three behaviours the header and the bottom sheet need and
+     no screen owns: the overflow menu, the back affordance, and opening and
+     closing a sheet. It runs last so the globals ui-shell.js declares exist,
+     and it touches nothing a screen renders. -->
+<script>
+(function(){
+  'use strict';
+  var navmenu = document.getElementById('navmenu');
+  var navtoggle = document.getElementById('b_navtoggle');
+  var scrim = document.getElementById('scrim');
+  var openSheet = null, sheetOpener = null;
+
+  function closeMenu(){
+    if (!navmenu.hasAttribute('data-open')) return;
+    navmenu.removeAttribute('data-open');
+    navtoggle.setAttribute('aria-expanded', 'false');
+  }
+  navtoggle.onclick = function(){
+    var on = !navmenu.hasAttribute('data-open');
+    navmenu.toggleAttribute('data-open', on);
+    navtoggle.setAttribute('aria-expanded', String(on));
+  };
+  /* The links are rewritten on every draw, so the listener lives on the
+     container that survives. */
+  navmenu.addEventListener('click', function(e){
+    if (e.target.closest('[data-go]')) closeMenu();
+  });
+  document.addEventListener('click', function(e){
+    if (!e.target.closest('.nav')) closeMenu();
+  });
+
+  function closeSheet(){
+    if (!openSheet) return;
+    openSheet.removeAttribute('data-open');
+    scrim.hidden = true;
+    var tab = document.querySelector('[data-sheet-open="' + openSheet.id + '"]');
+    if (tab) tab.setAttribute('aria-expanded', 'false');
+    if (sheetOpener) sheetOpener.focus();
+    openSheet = null; sheetOpener = null;
+  }
+  document.addEventListener('click', function(e){
+    var opener = e.target.closest('[data-sheet-open]');
+    if (opener){
+      var el = document.getElementById(opener.getAttribute('data-sheet-open'));
+      if (!el) return;
+      closeSheet();
+      openSheet = el; sheetOpener = opener;
+      el.setAttribute('data-open', '');
+      opener.setAttribute('aria-expanded', 'true');
+      scrim.hidden = false;
+      /* Reading a layout property forces the style change above to be applied
+         now. Without it the sheet is still `visibility:hidden` at this point
+         and the browser discards focus() on a hidden element, which would
+         leave a keyboard user outside the thing they just opened. */
+      void el.offsetHeight;
+      var close = el.querySelector('[data-sheet-close]');
+      if (close) close.focus();
+      return;
+    }
+    if (e.target.closest('[data-sheet-close]')) closeSheet();
+  });
+  document.addEventListener('keydown', function(e){
+    if (e.key !== 'Escape') return;
+    if (openSheet) closeSheet(); else closeMenu();
+  });
+  /* A sheet is a phone affordance. Crossing back into the three-column layout
+     with one open would leave the scrim over a perfectly usable column. */
+  addEventListener('resize', function(){
+    if (openSheet && innerWidth >= 900) closeSheet();
+  });
+
+  /* The screens render their own action bars and a bar with four actions on a
+     320px screen is two rows tall, not one. The clearance the content needs is
+     therefore whatever the bar actually measures — a constant here would sit a
+     control under the bar on exactly the screens that have the most to do. */
+  var frame = 0;
+  function syncBarHeight(){
+    if (frame) return;
+    frame = requestAnimationFrame(function(){
+      frame = 0;
+      var h = 0;
+      document.querySelectorAll('.actionbar').forEach(function(bar){
+        if (!bar.getClientRects().length) return;
+        if (getComputedStyle(bar).position !== 'fixed') return;
+        h = Math.max(h, Math.ceil(bar.getBoundingClientRect().height));
+      });
+      document.documentElement.style.setProperty('--bar-h', h + 'px');
+    });
+  }
+  new MutationObserver(syncBarHeight).observe(document.getElementById('main'),
+    { childList:true, subtree:true });
+  addEventListener('resize', syncBarHeight);
+  syncBarHeight();
+
+  /* Back. The app has no URL per screen — ui-shell.js switches on state.screen
+     — so the header's back affordance keeps its own trail of where the user
+     came from. Inside the brief it steps back through the seven steps first,
+     because that is what "back" means while you are filling a form. */
+  var trail = [];
+  var _go = go;
+  window.go = function(screen){
+    if (typeof state !== 'undefined' && state.screen !== screen) trail.push(state.screen);
+    closeMenu(); closeSheet();
+    return _go.apply(this, arguments);
+  };
+  document.getElementById('b_navback').onclick = function(){
+    if (typeof state !== 'undefined' && state.screen === 'brief' && state.step > 0){
+      /* One step, not one screen. Reading the step off state rather than
+         clicking the brief's own back button keeps this working whichever
+         markup ui-brief.js has rendered into the bar. */
+      state.step = Math.max(0, state.step - 1); draw(); return;
+    }
+    var back = trail.pop();
+    /* pop() has already removed it; go() would otherwise push it straight back
+       and the next press would return to where we just were. */
+    _go(back || 'start');
+    closeMenu(); closeSheet();
+  };
+})();
+</script>
 </body>
 </html>

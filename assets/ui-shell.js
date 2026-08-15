@@ -36,9 +36,10 @@ const STATE_ICON = { pass:'pass', review:'review', fail:'fail' };
 
 const SCREENS = ['start','brief','generating','concepts','detail','customise','validate','export','order',
   'tracking','noresults','library','mockups','bulk','dashboard','profiles','pricing','signin',
-  'settings','studio','compedit','layoutbuild'];
+  'settings','studio','compedit','layoutbuild','enhance','destructure'];
 const NAV = [['start','Start'],['brief','Brief'],['concepts','Concepts'],['library','Library'],
   ['mockups','Mockups'],['bulk','Bulk'],['dashboard','My designs'],['studio','Studio'],
+  ['enhance','Enhance'],['destructure','Take apart'],
   ['pricing','Plans'],['signin','Account']];
 const STAGES = [
   ['08','Generate',       'generating'],
@@ -120,6 +121,12 @@ function go(screen){
    counts it produced. Short and staggered, so it reads as a composition
    resolving rather than a progress bar pretending to work. */
 function runGenerate(){
+  /* The funnel's start. Emitted here rather than on the first keystroke
+     because a brief someone abandoned mid-typing never started in any sense
+     §5.3 is measuring — it would inflate the denominator of the very rate the
+     PRD gates V2 on. */
+  track('brief.started', { meta:{ vertical: state.industry, format: state.format,
+                                  locale: uiLang() } });
   const content = readForm();
   const frontScript = (state.script === 'bangla' || state.script === 'bangla-only') ? 'bangla' : null;
   state.gen = generate({ industry:state.industry, personality:state.personality,
@@ -127,6 +134,11 @@ function runGenerate(){
   state.pick = 0; state.refine = null; state.history = []; state.instrLog = [];
   state.genStage = 0;
   if (!state.gen.picked.length){ go('noresults'); return; }
+  /* Reaching a concept is the §5.3 numerator, and it is counted when the
+     engine produced concepts rather than when the screen finished animating —
+     a customer who navigated away during the reveal still got six designs. */
+  track('concept.viewed', { meta:{ count: state.gen.picked.length,
+                                   vertical: state.industry, format: state.format } });
   go('generating');
   if (reduced()){ state.genStage = 99; go('concepts'); return; }
   const tick = () => {
@@ -209,7 +221,9 @@ function draw(){
     noresults:'Constraint conflict', dashboard:'My designs', profiles:'Brand profiles',
     pricing:'Plans', signin:'Account', settings:'Settings',
     studio:'Design studio — internal', compedit:'New component', layoutbuild:'Layout builder',
-    customise:'Customise'
+    customise:'Customise',
+    enhance:'Enhance a card you already have',
+    destructure:'Take a card apart'
   }[state.screen] || '';
   $('#navlinks').innerHTML = NAV.filter(([s]) => screenEnabled(s)).map(([s,l]) =>
     `<button class="btn btn-ghost" data-go="${s}" aria-current="${state.screen===s}">${l}</button>`).join('');
@@ -237,6 +251,12 @@ function draw(){
   if (state.screen === 'compedit')   drawCompEdit();
   if (state.screen === 'layoutbuild')drawLayoutBuild(content);
   if (state.screen === 'customise') drawCustomise(design, content);
+  /* Both new surfaces are optional: a build without them still runs, and the
+     router says so rather than throwing a blank screen at someone. */
+  if (state.screen === 'enhance')
+    typeof drawEnhance === 'function' ? drawEnhance(content) : missingScreen('enhanceRoot', 'Enhance');
+  if (state.screen === 'destructure')
+    typeof drawDestructure === 'function' ? drawDestructure(content) : missingScreen('destructureRoot', 'Take apart');
   drawStageBar();
 }
 
@@ -454,7 +474,16 @@ async function api(path, opts = {}){
       const e = new Error('You are offline. Briefing and preview still work; this step needs a connection.');
       e.code = 'offline'; e.remediation = 'Reconnect and try again.'; throw e;
     }
-    const headers = { 'content-type':'application/json' };
+    /* Callers may add headers, and the reason that matters is authentication:
+       a session travels as `Authorization: Bearer …` rather than as a cookie,
+       so that it is never an ambient credential the browser attaches to every
+       request on its own. A closed header literal here would have forced the
+       token into the JSON body instead, and since a Request body can only be
+       read once, every endpoint would then have to parse the token out by
+       hand and forward it — the per-endpoint discipline that gets forgotten
+       in exactly one place, which is the same argument Technical Design §5.2
+       makes for row-level security over application-layer filtering. */
+    const headers = { 'content-type':'application/json', ...(opts.headers || {}) };
     const method = opts.method || 'GET';
     if (method !== 'GET' && method !== 'HEAD') {
       headers['idempotency-key'] = opts.idempotencyKey ||
@@ -466,16 +495,30 @@ async function api(path, opts = {}){
     });
     const body = await res.json().catch(() => ({}));
     if (!res.ok) {
+      /* The whole envelope is copied onto the error, not an enumerated subset.
+         Naming fields one at a time is how `remediationText`, `field` and then
+         `alternatives` each got silently dropped in turn: an endpoint adds a
+         field, nothing here knows about it, and the screen renders a next step
+         that is simply missing. Copying everything means the next field an
+         endpoint invents arrives without this line having to be edited. */
       const env = body.error || {};
       const e = new Error(env.message || 'That did not work.');
+      Object.assign(e, env);
       e.code = env.code || ('http_' + res.status);
-      e.field = env.field; e.remediation = env.remediation;
+      e.envelope = env;
       throw e;
     }
     return body;
   } catch (err) {
-    net.lastError = { code: err.code || 'network', message: err.message,
-                      remediation: err.remediation || 'Check your connection and try again.' };
+    /* And the same object reaches `net.lastError`, which is the documented way
+       a screen reads the last failure. These two were built separately and
+       nothing forced them to agree, which is exactly why they drifted. */
+    net.lastError = { ...(err.envelope || {}),
+                      envelope: err.envelope,
+                      code: err.code || 'network', message: err.message,
+                      field: err.field,
+                      remediation: err.remediation || 'Check your connection and try again.',
+                      remediationText: err.remediationText };
     throw err;
   } finally {
     net.pending.delete(key);
@@ -489,6 +532,45 @@ const idemNonce = () => _idemNonce;
 const newAttempt = () => { _idemNonce++; };
 
 const isPending = () => net.pending.size > 0;
+
+/* ── Funnel telemetry ─────────────────────────────────────────────────────
+   PRD §5.3 gates V2 on numbers nobody can currently compute: what share of
+   started briefs reach a concept, and the median time from brief to export.
+   Both need the two moments only the client knows about.
+
+   Three constraints shape this. It is fire-and-forget, because Technical
+   Design §9 requires briefing and preview to work with no network at all and
+   a metric must never be the thing that breaks that. It carries a `briefKey`
+   — a random per-brief id — rather than anything identifying, so a funnel can
+   be joined without a person being followed. And it is silent on failure:
+   losing a count is not worth a line in a customer's console.
+
+   The key lives for one brief. Regenerating from the same brief keeps it, so
+   a customer who tries three times is one brief that reached concepts, not
+   three; starting over mints a new one. */
+let _briefKey = null;
+let _briefStartedMs = null;
+
+function briefKey(){
+  if (!_briefKey){
+    _briefKey = 'bk' + specHash({ t: Date.now(), r: Math.random() }) + 'x';
+    _briefStartedMs = Date.now();
+  }
+  return _briefKey;
+}
+function newBrief(){ _briefKey = null; _briefStartedMs = null; return briefKey(); }
+const briefStartedMs = () => _briefStartedMs;
+
+function track(event, fields = {}){
+  if (isOffline()) return;
+  try {
+    fetch('/api/metrics', { method:'POST', headers:{ 'content-type':'application/json' },
+      body: JSON.stringify({ event, briefKey: briefKey(), ...fields }),
+      keepalive: true })
+      .catch(() => {});
+  } catch (e) { /* a count is never worth an exception */ }
+}
+
 
 /** Repaint only the parts that show pending state, so a click feels
     immediate without re-running the composer for every keystroke. */
@@ -506,13 +588,56 @@ const pendingBlock = (what) =>
   `<div class="state state-pending" role="status" aria-live="polite">
      <span class="spin" aria-hidden="true"></span> ${esc(what || t('loading'))}</div>`;
 
+/* `remediation` in the API envelope is a machine token — `fix_phone`,
+   `sign_in`, `wait` — because screens branch on it, and branching on the
+   error code cannot work: a mistyped digit and a dead session are both 401
+   `unauthorized`, and throwing someone who fat-fingered a code back to the
+   sign-in screen they are already on is the worse failure.
+
+   The token must never reach a customer's eyes, though, and it did: a
+   rate-limited caller read the literal word "wait" on screen. The token stays
+   on the error so branching keeps working, and the sentence is looked up here
+   at render time. This table lives in the shell rather than in one screen
+   because every screen that renders a remediation has the same bug. */
+const REMEDIATION_TEXT = {
+  fix_phone:        'Eleven digits starting 013 to 019, with or without the +880.',
+  fix_code:         'The code in the message is six digits. Check it again, or ask for a new one.',
+  fix_name:         'Type the name you want on your saved designs. It is not checked against anything.',
+  request_new_code: 'Nothing you have designed is lost either way — it is on this browser until an account claims it.',
+  sign_in:          'Sign in again to carry on. Your work is still here.',
+  wait:             'The message above says how long. Nothing you have designed is affected.',
+  retry:            'Try again in a moment.',
+  contact_support:  'This browser is already linked to a different account. Sign in with that number instead, or contact support to move it.'
+};
+
+/** The sentence a customer should read for this error, whether the envelope
+ *  gave us a token, a token with a fallback, or already-written prose.
+ *  Screens that render a remediation outside `errorBlock` must go through
+ *  this — rendering `e.remediation` directly puts the word `wait` on screen.
+ *
+ *  Order of preference: our own copy for a known token, because only that
+ *  can be localised; then whatever sentence the server sent alongside it;
+ *  then prose that arrived in the token field. An unrecognised token with no
+ *  fallback renders as nothing rather than as itself — a missing sentence is
+ *  a small failure, a leaked token is an embarrassing one. */
+function remedyText(e){
+  if (!e) return '';
+  const r = e.remediation;
+  const isToken = typeof r === 'string' && /^[a-z][a-z0-9_]*$/.test(r);
+  if (isToken && REMEDIATION_TEXT[r]) return REMEDIATION_TEXT[r];
+  if (e.remediationText) return e.remediationText;
+  if (isToken) return '';
+  return r || '';
+}
+
 /** The one failure block. It always names a next step, because the API
     envelope always carries one (Technical Design §8). */
 function errorBlock(err, retryLabel){
   const e = err || net.lastError; if (!e) return '';
+  const note = remedyText(e);
   return `<div class="state state-error" role="alert">
     <b>${esc(e.message)}</b>
-    ${e.remediation ? `<span class="note">${esc(e.remediation)}</span>` : ''}
+    ${note ? `<span class="note">${esc(note)}</span>` : ''}
     ${retryLabel ? `<button class="btn" data-retry="1">${esc(retryLabel)}</button>` : ''}
   </div>`;
 }
@@ -539,6 +664,14 @@ function beforeUnloadGuard(e){
 
 /* ── Screen visibility. A flagged-off screen must not be reachable from nav,
    from the stage rail, or by setting the hash by hand. */
+/** A screen whose script did not load says so, rather than rendering nothing
+ *  and leaving the customer to wonder which of them is broken. */
+function missingScreen(rootId, label){
+  const el = $('#' + rootId);
+  if (el) el.innerHTML = `<div class="state state-error" role="alert"><b>${esc(label)} is not available on this build.</b>
+    <span class="note">Its script did not load. Nothing you have designed is affected.</span></div>`;
+}
+
 const SCREEN_FLAG = { bulk:'bulk', studio:'studio', compedit:'studio',
                       layoutbuild:'studio', mockups:'mockups', profiles:'profiles' };
 const screenEnabled = (sc) => !SCREEN_FLAG[sc] || FLAGS.get(SCREEN_FLAG[sc]);

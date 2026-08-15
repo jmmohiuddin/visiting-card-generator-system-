@@ -44,6 +44,45 @@ const FORMATS = [
   { id:'bd-square',name:'Square — 55 × 55 mm',              w:55, h:55, bleed:3, safe:4, orientation:'square' }
 ];
 
+/* ── The safe area belongs to the JOB, not to the trim ────────────────────
+   The `safe` on a format record above is the plain-ink figure, and Master
+   PRD §7 asks for two more: 5 mm when a finish is registered on top of the
+   printed sheet, 6 mm when the card is die-cut. The reason is mechanical
+   rather than editorial. Ink is laid down in one pass on one machine, so its
+   registration is as good as the press is; a foil block, an emboss die, a
+   letterpress plate and an edge paint are all applied in a SECOND pass on a
+   different machine, against a sheet that has already been through a nip and
+   changed size slightly, so their registration to the printed image is
+   looser. A rotary die is looser still — it is set from the trim, wanders
+   further than a guillotine, and takes the corner with it.
+
+   Which means the same 4 mm that is generous on a plain card is not enough
+   on a foiled one, and a foiled card composed at 4 mm is not a card with a
+   tight margin; it is a card whose gold sometimes lands on the name.
+
+   Letterpress and edge paint are named here although neither is in
+   `FINISH_COST` yet, deliberately: the geometry rule is what PRD §7 states,
+   and it should already be right on the day the cost table learns to sell
+   them. `lib/quote-server.mjs` lists the same four as the finishes that
+   cannot be proofed from a photograph — the same physical fact, seen from
+   the other end. */
+const REGISTERED_FINISHES = ['foil', 'emboss', 'letterpress', 'edgepaint'];
+const SAFE_REGISTERED = 5, SAFE_DIECUT = 6;
+
+/* The die radius is clamped exactly as the renderer and the print writer
+   clamp it, so a nonsense corner cannot buy a safe area for a die that is
+   never actually cut. */
+const dieRadius = spec => Math.max(0, Math.min(6, Number(spec && spec.corner) || 0));
+
+function safeFor(fmt, spec){
+  const s = spec || {};
+  const finishes = Array.isArray(s.finishes) ? s.finishes : [];
+  let safe = fmt.safe;
+  if (finishes.some(f => REGISTERED_FINISHES.includes(f))) safe = Math.max(safe, SAFE_REGISTERED);
+  if (dieRadius(s) > 0) safe = Math.max(safe, SAFE_DIECUT);
+  return safe;
+}
+
 /* ─────────────────────────── TYPE SYSTEMS ───────────────────────────
    Every system MUST declare a Bangla family. A type system without one
    cannot be offered on a bilingual card — that is enforced in preflight,
@@ -335,6 +374,51 @@ const LAYOUTS = [
   ]}
 ];
 
+/* ═══════════════════════════ MEMOISATION ═══════════════════════════════
+   Generation asks the same pure question hundreds of times in a row. One
+   brief enumerates 360 candidates over 9 layouts × 8 palettes × 5 type
+   systems, and a QR symbol depends on none of those beyond the millimetres
+   it is given — so the same vCard gets encoded, masked and penalty-scored
+   forty times to produce forty identical matrices.
+
+   Caching that is safe for exactly the reason §3.3 gives: the engine may not
+   read a clock, a database or an unseeded random number, so a pure function's
+   answer cannot go stale between two calls with the same arguments. A cache
+   here can only ever save work; it can never change an answer. That is a
+   property of the constraint, not of the cache, which is why the constraint
+   is worth keeping even when it is inconvenient.
+
+   Every cache is bounded. An unbounded one is a leak in the sessions that
+   matter most — an hour of typing, a 200-row CSV — and eviction is free of
+   consequence, since the worst it costs is recomputing something. Eviction
+   is oldest-first, which is what a Map's insertion order already gives.
+
+   `PERF.caches = false` turns all of them off. That switch is what makes
+   "the optimisation changed nothing" a test rather than a claim: the suite
+   runs the whole matrix through both paths and requires identical output,
+   and the hit counters prove the fast path was genuinely the fast path.   */
+const PERF = { caches: true, hits: 0, misses: 0 };
+
+/* A memoised pure function. `make` must never return `undefined` — that is
+   the one value this cannot tell apart from a miss. */
+function memo(limit){
+  const m = new Map();
+  return {
+    map: m,
+    clear(){ m.clear(); },
+    get(key, make){
+      if (!PERF.caches){ PERF.misses++; return make(); }
+      const hit = m.get(key);
+      if (hit !== undefined){ PERF.hits++; return hit; }
+      PERF.misses++;
+      const v = make();
+      m.set(key, v);
+      if (m.size > limit) m.delete(m.keys().next().value);
+      return v;
+    }
+  };
+}
+
 /* ═══════════════════════════ QR — a real encoder ═══════════════════════
    The placeholder module grid that used to live here was the last fake in
    this engine, and an indefensible one: the product's whole claim is that
@@ -539,7 +623,19 @@ const QR = (() => {
              blocks, ecBlocks, ecLen, capacity:CAP[version] };
   }
 
-  return { encode, syndromes, CAP };
+  /* Encoding is by far the most expensive thing generation does — mask
+     selection alone builds eight full matrices and scores each one against
+     four penalty rules — and it depends on the payload text and nothing else.
+     A brief that enumerates 360 candidates asks for at most five distinct
+     payloads: the four rungs of the vCard ladder plus the short-link
+     fallback. Sixty-four entries is far more than one brief needs and still
+     covers a bulk run's worth of distinct people before the oldest is
+     dropped. Nothing here is derived from a font measurement, so this cache
+     survives webfont loading; only geometry does. */
+  const _qrCache = memo(64);
+  const encodeMemo = text => _qrCache.get(text, () => encode(text));
+
+  return { encode: encodeMemo, syndromes, CAP };
 })();
 
 /* vCard payload with a CONTENT LADDER — the same idea as the type fit ladder,
@@ -612,19 +708,28 @@ function qrPayload(C, availMm, share){
    rendering agree — that is what makes preflight trustworthy.        */
 const mctx = document.createElement('canvas').getContext('2d');
 const REF = 200;
-const _mcache = new Map();
+/* The shell drops this cache the moment `document.fonts.ready` resolves,
+   because anything measured against a fallback face is measured against the
+   wrong face. Nothing else in the engine outlives a call while holding a
+   measurement, so that one clear is the whole invalidation story.
+
+   The bound is far above any single operation's working set — one brief fills
+   about 340 entries and a 200-row bulk run about 3,800 — so it cannot thrash
+   inside the work it exists to speed up. It exists for the session that runs
+   for an hour, where the ladder's track and step rungs make a fresh key on
+   every increment and the map would otherwise only ever grow. */
+const _mcache = memo(16384);
 function measure(text, family, weight, trackEm){
-  const key = text+'|'+family+'|'+weight+'|'+trackEm;
-  const hit = _mcache.get(key); if (hit) return hit;
-  mctx.font = `${weight} ${REF}px ${family}`;
-  const m = mctx.measureText(text);
-  const gaps = Math.max(0, [...text].length - 1);
-  const r = {
-    w:   m.width/REF + trackEm*gaps,
-    asc: (m.fontBoundingBoxAscent  ?? m.actualBoundingBoxAscent  ?? REF*0.80)/REF,
-    desc:(m.fontBoundingBoxDescent ?? m.actualBoundingBoxDescent ?? REF*0.20)/REF
-  };
-  _mcache.set(key, r); return r;
+  return _mcache.get(text+'|'+family+'|'+weight+'|'+trackEm, () => {
+    mctx.font = `${weight} ${REF}px ${family}`;
+    const m = mctx.measureText(text);
+    const gaps = Math.max(0, [...text].length - 1);
+    return {
+      w:   m.width/REF + trackEm*gaps,
+      asc: (m.fontBoundingBoxAscent  ?? m.actualBoundingBoxAscent  ?? REF*0.80)/REF,
+      desc:(m.fontBoundingBoxDescent ?? m.actualBoundingBoxDescent ?? REF*0.20)/REF
+    };
+  });
 }
 
 function wrapText(text, family, weight, trackEm, maxWmm, sizeMm, maxLines){
@@ -650,7 +755,12 @@ function fitSlot(slot, rawLines, ctx, geom){
   const script = slot.forcedScript || scriptOf(rawLines.join(' '));
   const sm = SCRIPTS[script];
   const family = script === 'bangla' ? ctx.type.bangla : ctx.type.latin;
-  const weight = slot.weight === 'name' ? ctx.type.weightName
+  /* `slot.weight` is a role name from the layout record. A per-slot override
+     may pin an actual numeric weight instead — that is how the part editor
+     makes "set this line bolder" a real change rather than a recorded one
+     that never reaches the page. Absent, this resolves exactly as before. */
+  const weight = typeof slot.weightNum === 'number' ? slot.weightNum
+               : slot.weight === 'name' ? ctx.type.weightName
                : slot.weight === 'display' ? 800 : 400;
 
   // Fit against the CLAMPED geometry, so the safe area constrains the text
@@ -664,7 +774,13 @@ function fitSlot(slot, rawLines, ctx, geom){
      to the floor rather than rendered illegally — so a designer cannot author
      an unprintable card, and the same record stays legal when the script
      changes (Bangla floors 1.25pt higher than Latin) or the trim shrinks. */
-  let sizePt = Math.max(minPt, ctx.baseNamePt * (slot.scale ?? .5) * sm.opticalScale * ctx.densityMul);
+  /* A pinned size still goes through the floor and still goes through the fit
+     ladder below — pinning chooses the starting point, it does not exempt the
+     text from having to fit or from the per-script minimum. That is what keeps
+     a hand-set size inside the print guarantee. */
+  let sizePt = typeof slot.sizePtPinned === 'number'
+    ? Math.max(minPt, slot.sizePtPinned)
+    : Math.max(minPt, ctx.baseNamePt * (slot.scale ?? .5) * sm.opticalScale * ctx.densityMul);
   let track  = Math.max(sm.tracking.min, Math.min(slot.track ?? 0, sm.tracking.max));
   let lines  = rawLines.slice();
   const applied = [];
@@ -759,24 +875,48 @@ function contentFor(slot, C, face){
   }
 }
 
-function compose(spec){
-  const fmt  = FORMATS.find(f=>f.id===spec.format);
+/* Palette resolution. Several palettes declare `panel` identical to `bg`
+   (a dark palette whose panel is also dark). Layouts whose structure IS the
+   panel — Split, Band — would then render as a flat field and silently lose
+   their composition. Rather than forbid the combination, resolve it: an
+   invisible panel falls back to the accent. This is the kind of interaction
+   that only shows up when layouts and palettes are combinatorial, which is
+   exactly why they must be data the engine can reason about. */
+function resolvePalette(id){
+  const pal = { ...PALETTES.find(p=>p.id===id) };
+  if (String(pal.panel).toLowerCase() === String(pal.bg).toLowerCase()) pal.panel = pal.accent;
+  return pal;
+}
+
+/* The half of composition that colour has nothing to do with.
+
+   Geometry comes from the trim, the grid, the type system's metrics and the
+   content; the palette only decides what gets painted into boxes this
+   function has already decided the position and size of. Keeping the two
+   apart is not tidiness — it is what lets generation compose a layout once
+   and rank it against all eight palettes, instead of running the fit ladder
+   eight times to arrive at the same millimetres. The separation is enforced
+   structurally rather than by comment: no palette reaches this scope at all,
+   so a future check that wanted one would throw on a name that is not there
+   rather than quietly make the reuse wrong. */
+function composeGeometry(spec){
+  /* The trim record is shared and immutable; the safe area is not a property
+     of the trim alone, so the format this composition works against is the
+     trim with THIS job's safe area resolved onto it. Everything downstream —
+     `box()`, preflight, the renderer's guides, the print writer's TrimBox
+     note — already reads `fmt.safe`, so resolving it once here is what keeps
+     the three of them from disagreeing about where the content may sit. A
+     plain card resolves to the record's own figure and is handed the shared
+     record itself, so nothing about it can move. */
+  const trim = FORMATS.find(f=>f.id===spec.format);
+  const safe = safeFor(trim, spec);
+  const fmt  = safe === trim.safe ? trim : { ...trim, safe };
   const type = TYPE_SYSTEMS.find(t=>t.id===spec.type);
-  const pal0 = PALETTES.find(p=>p.id===spec.palette);
   const face = LAYOUTS.find(l=>l.id===spec.layout);
 
-  /* Palette resolution. Several palettes declare `panel` identical to `bg`
-     (a dark palette whose panel is also dark). Layouts whose structure IS the
-     panel — Split, Band — would then render as a flat field and silently lose
-     their composition. Rather than forbid the combination, resolve it: an
-     invisible panel falls back to the accent. This is the kind of interaction
-     that only shows up when layouts and palettes are combinatorial, which is
-     exactly why they must be data the engine can reason about. */
-  const pal = { ...pal0 };
-  if (String(pal.panel).toLowerCase() === String(pal.bg).toLowerCase()) pal.panel = pal.accent;
   const grid = gridFor(fmt);
   const ctx  = {
-    fmt, type, pal, grid,
+    fmt, type, grid,
     cellW: fmt.w/grid.cols, cellH: fmt.h/grid.rows,
     // base size follows the SHORT edge — a portrait card is not a landscape
     // card rotated, and its name cannot be set at landscape scale
@@ -789,11 +929,36 @@ function compose(spec){
 
   const faceSlots = slotsFor(face, fmt.orientation);
   if (!faceSlots){
-    return { spec, fmt, pal, type, face, elements:[], trace:[], dropped:[],
+    return { fmt, type, face, elements:[], trace:[], dropped:[],
       eliminated:`${face.name} has no ${fmt.orientation} composition — it is authored for landscape only` };
   }
 
-  for (const slot of faceSlots){
+  /* ── Per-slot style overrides ──────────────────────────────────────────
+     An optional channel used by the part editor, where someone restyles a
+     card they uploaded. It carries what a part IS — colour, weight, size,
+     case, alignment — and deliberately carries no position: geometry stays
+     this function's output so the card cannot be made unprintable from
+     outside. Merging happens BEFORE `box()` and `fitSlot()`, so an overridden
+     size or weight is measured and laddered like any other, rather than being
+     painted on afterwards at a width nothing checked.
+
+     When `spec.slotStyle` is absent this is a no-op and the composition is
+     byte-identical to what it was before the channel existed. */
+  const styleFor = (ref) => (spec.slotStyle && spec.slotStyle[ref]) || null;
+  const restyle = (slot) => {
+    const o = styleFor(slot.ref);
+    if (!o) return slot;
+    const next = { ...slot };
+    if (typeof o.upper === 'boolean') next.upper = o.upper;
+    if (typeof o.color === 'string') next.color = o.color;
+    if (typeof o.align === 'string') next.align = o.align;
+    if (typeof o.weightNum === 'number') next.weightNum = o.weightNum;
+    if (typeof o.sizePt === 'number') next.sizePtPinned = o.sizePt;
+    return next;
+  };
+
+  for (const rawSlot of faceSlots){
+    const slot = restyle(rawSlot);
     if (['rule','panel','gridlines'].includes(slot.kind)){
       out.push({ ...slot, geom: box(slot, ctx) }); continue;
     }
@@ -855,7 +1020,16 @@ function compose(spec){
     if (fit.applied.length) trace.push({ slot:slot.ref, applied:fit.applied });
   }
 
-  return { spec, fmt, pal, type, face, elements: out, trace, dropped, eliminated };
+  return { fmt, type, face, elements: out, trace, dropped, eliminated };
+}
+
+/* A composition, painted. The shape returned here has not changed and must
+   not: it is what preflight, the renderer, the PDF writer and the parity
+   suite all read. */
+function compose(spec){
+  const g = composeGeometry(spec);
+  return { spec, fmt:g.fmt, pal:resolvePalette(spec.palette), type:g.type, face:g.face,
+           elements:g.elements, trace:g.trace, dropped:g.dropped, eliminated:g.eliminated };
 }
 
 /* Grid units → millimetres.
@@ -864,7 +1038,13 @@ function compose(spec){
    gridlines, ghost mark) are not, because they are meant to bleed. This is
    what makes a layout record trim-agnostic: the same 12 × 8 record is legal
    at 89 × 51, at 51 × 89 portrait and at 55 × 55 square, because the composer
-   — not the designer — is responsible for the safe area at every trim. */
+   — not the designer — is responsible for the safe area at every trim.
+
+   `ctx.fmt.safe` is this job's safe area, already escalated for a registered
+   finish or a die by `safeFor`. Content is PLACED against it here rather than
+   merely checked against it afterwards, which is the difference between a
+   foiled card that composes tighter and one that composes wrong and is then
+   told so. */
 const BLEEDS_KIND = { panel:1, gridlines:1, ghost:1 };
 function box(slot, ctx){
   const g = { x:slot.box[0]*ctx.cellW, y:slot.box[1]*ctx.cellH,
@@ -972,18 +1152,29 @@ function renderSVG(c, opt={}){
 /* ═══════════════════════════ PREFLIGHT ═══════════════════════════
    Every check is arithmetic over composed geometry in millimetres.
    No AI, no heuristics, no opinion. Blocking findings refuse export. */
+/* Both of these turn a hex string into one number, and both are asked the
+   same handful of questions over and over: a library of eight palettes offers
+   perhaps thirty distinct colours, and preflight runs per candidate. The
+   sRGB transfer curve is four `Math.pow` calls per colour, which is why this
+   is worth remembering at all. Colour has nothing to do with type, so neither
+   cache is invalidated by webfonts loading. */
+const _lumCache = memo(256), _tacCache = memo(256);
 function lum(hex){
-  const c = hex.replace('#',''); const n = c.length===3 ? c.split('').map(x=>x+x).join('') : c;
-  const v = [0,2,4].map(i=>parseInt(n.substr(i,2),16)/255)
-                   .map(x=> x<=0.03928 ? x/12.92 : Math.pow((x+0.055)/1.055,2.4));
-  return 0.2126*v[0]+0.7152*v[1]+0.0722*v[2];
+  return _lumCache.get(hex, () => {
+    const c = hex.replace('#',''); const n = c.length===3 ? c.split('').map(x=>x+x).join('') : c;
+    const v = [0,2,4].map(i=>parseInt(n.substr(i,2),16)/255)
+                     .map(x=> x<=0.03928 ? x/12.92 : Math.pow((x+0.055)/1.055,2.4));
+    return 0.2126*v[0]+0.7152*v[1]+0.0722*v[2];
+  });
 }
 const contrast = (a,b) => { const [x,y]=[lum(a),lum(b)].sort((p,q)=>q-p); return (x+0.05)/(y+0.05); };
 function tac(hex){ // naive RGB→CMYK total area coverage, good enough to catch the 300% cliff
-  const c=hex.replace('#',''); const n=c.length===3?c.split('').map(x=>x+x).join(''):c;
-  const [r,g,b]=[0,2,4].map(i=>parseInt(n.substr(i,2),16)/255);
-  const k=1-Math.max(r,g,b); if(k>=1) return 100;
-  return Math.round(((1-r-k)/(1-k)+(1-g-k)/(1-k)+(1-b-k)/(1-k)+k)*100);
+  return _tacCache.get(hex, () => {
+    const c=hex.replace('#',''); const n=c.length===3?c.split('').map(x=>x+x).join(''):c;
+    const [r,g,b]=[0,2,4].map(i=>parseInt(n.substr(i,2),16)/255);
+    const k=1-Math.max(r,g,b); if(k>=1) return 100;
+    return Math.round(((1-r-k)/(1-k)+(1-g-k)/(1-k)+(1-b-k)/(1-k)+k)*100);
+  });
 }
 function overlaps(a,b){ return a.x < b.x+b.w-0.1 && b.x < a.x+a.w-0.1 && a.y < b.y+b.h-0.1 && b.y < a.y+a.h-0.1; }
 
@@ -1341,17 +1532,40 @@ function generate(brief, content, opts={}){
   const cands = [];
 
   for (const L of LAYOUTS.filter(l=>l.face==='front')){
+    /* The fit ladder is run once per type system, not once per type system
+       per palette. Geometry does not depend on colour — `composeGeometry` has
+       no palette in scope to depend on it with — so the eight palettes of a
+       given layout and type share one composition, and generation does 45
+       fit-ladder passes where it used to do 360 for the same 360 candidates.
+
+       The eight siblings share their `elements`, `trace` and `dropped`
+       arrays. That is safe rather than merely usually safe, because the
+       diversity rule below admits at most one concept per layout: no two
+       candidates that survive into the returned six can be siblings, so
+       nothing a caller holds aliases anything else it holds. The 354 that
+       do not survive are unreachable the moment this function returns.
+
+       The library cannot move underneath this. Everything hoisted is
+       recomputed on the next call, and there is no call in between — which
+       is the difference between hoisting inside one pure function and a
+       cache that outlives it. */
+    const saved = LAYOUTS.indexOf(L);
+    if (script) LAYOUTS[saved] = { ...L, forceScript:script };
+    const geomOf = T => composeGeometry({ format:brief.format, type:T.id,
+                                          density:brief.density, layout:L.id, content });
+    const geomFor = new Map();
+    if (PERF.caches) for (const T of TYPE_SYSTEMS) geomFor.set(T.id, geomOf(T));
+
     for (const P of PALETTES){
       for (const T of TYPE_SYSTEMS){
         stages.enumerated++;
         const spec = { format:brief.format, type:T.id, palette:P.id,
                        density:brief.density, layout:L.id, content };
-        const saved = LAYOUTS.indexOf(L);
-        if (script){ LAYOUTS[saved] = { ...L, forceScript:script }; }
-        const composed = compose(spec);
-        LAYOUTS[saved] = L;
-        if (composed.eliminated) continue;
+        const g = geomFor.get(T.id) || geomOf(T);
+        if (g.eliminated) continue;
         stages.composed++;
+        const composed = { spec, fmt:g.fmt, pal:resolvePalette(P.id), type:g.type, face:g.face,
+                           elements:g.elements, trace:g.trace, dropped:g.dropped, eliminated:g.eliminated };
         const findings = preflight(composed);
         if (findings.some(f=>f.s==='fail')) continue;
         stages.printSafe++;
@@ -1360,6 +1574,11 @@ function generate(brief, content, opts={}){
         cands.push(cand);
       }
     }
+    /* The forced-script clone stays in place for the whole of this layout's
+       enumeration and comes out at the end of it. Nothing between those two
+       points reads the library by index — scoring reads `LAYOUT_AXES` by id
+       and preflight reads only the composition it was handed. */
+    LAYOUTS[saved] = L;
   }
 
   cands.sort((a,b)=>b.score.total-a.score.total);
@@ -1393,8 +1612,22 @@ function generate(brief, content, opts={}){
 function gradeLogo(a, placedMm){
   const F = [], mmToIn = 25.4;
   if (a.vector){
-    F.push({ s:'pass', label:'Vector artwork', note:'scales to any size; can be foiled, embossed or letterpressed' });
-    if (a.colors > 4)
+    F.push({ s:'pass', label:`Vector artwork${a.kind ? ` (${a.kind.toUpperCase()})` : ''}`,
+             note:'scales to any size; can be foiled, embossed or letterpressed' });
+
+    /* A PDF or EPS whose whole content is one placed photograph is a raster in
+       a vector wrapper. It survives every check that asks "is this vector"
+       and fails at the press exactly like a JPEG, so it is called out here
+       rather than at export — which §5.2 is explicit is the moment trust
+       dies. */
+    if (a.rasterInside)
+      F.push({ s:'review', label:'This vector file contains a placed image',
+               note:'the artwork inside is a photograph, so it will print at whatever resolution that image has and cannot be foiled or embossed. A drawn version would fix it.' });
+
+    if (a.colors === null)
+      F.push({ s:'review', label:'Colour count not measured in this format',
+               note:'a PDF or EPS needs opening to count its colours. If you want foil or letterpress, confirm the logo is one colour.' });
+    else if (a.colors > 4)
       F.push({ s:'review', label:`${a.colors} colours in the artwork`,
                note:'foil and letterpress need one colour — a single-colour version will be required for those finishes' });
   } else {
@@ -1420,10 +1653,80 @@ function gradeLogo(a, placedMm){
 
 /* Browser-side measurement. Kept separate from the grader above so the
    decision logic stays pure and portable. */
+/* ── PDF and EPS logos ─────────────────────────────────────────────────────
+   Master PRD §5.2 says to accept SVG, PDF and EPS at upload and to reject a
+   low-quality raster with a specific reason at that moment rather than at
+   export. Only SVG was accepted, which in this market rejects the commonest
+   handover there is: a company's logo arrives from whoever designed it as an
+   Illustrator or CorelDRAW export, and that is a PDF or an EPS far more often
+   than it is an SVG. Telling that customer "we cannot read your logo" sends
+   them back to the shop, which is the outcome this product exists to avoid.
+
+   Neither format is rendered here. What the quality gate needs is narrower
+   than rendering: is this vector, how large is it, and does it secretly
+   contain a raster? All three are answerable from the header and a scan of
+   the stream, and answering only what can be answered is the difference
+   between a gate and a guess. Placement uses the file as supplied — the print
+   writer embeds it, and `gradeLogo` decides whether it is good enough. */
+const EPS_BBOX  = /%%(?:HiRes)?BoundingBox:\s*([-\d.]+)\s+([-\d.]+)\s+([-\d.]+)\s+([-\d.]+)/;
+const PDF_BOXES = /\/(?:MediaBox|CropBox|TrimBox)\s*\[\s*([-\d.]+)\s+([-\d.]+)\s+([-\d.]+)\s+([-\d.]+)/;
+
+/* A vector file that is one big embedded photograph is a raster wearing a
+   vector extension, and it fails at the press exactly like a raster. EPS
+   announces an embedded bitmap with an image operator; PDF with an image
+   XObject. Both are cheap to look for and expensive to discover later. */
+const EPS_RASTER = /\b(?:colorimage|imagemask|\bimage\b)\s*$|\/DataSource/mi;
+const PDF_RASTER = /\/Subtype\s*\/Image/;
+
+function inspectVectorDoc(text, kind){
+  const m = kind === 'eps' ? EPS_BBOX.exec(text) : PDF_BOXES.exec(text);
+  if (!m) return { ok:false, why: kind === 'eps'
+    ? 'that EPS declares no BoundingBox, so there is no way to know what size it prints at'
+    : 'that PDF declares no page box, so there is no way to know what size it prints at' };
+
+  /* Both formats measure in points. A logo is a few tens of millimetres; a
+     bounding box of zero or one the size of a poster means the file is not
+     what it claims, and guessing a scale for it would place it wrongly. */
+  const wPt = Math.abs(+m[3] - +m[1]), hPt = Math.abs(+m[4] - +m[2]);
+  if (!(wPt > 1 && hPt > 1)) return { ok:false, why:'that file measures effectively zero — it may be empty' };
+
+  const rasterInside = kind === 'eps' ? EPS_RASTER.test(text) : PDF_RASTER.test(text);
+  return { ok:true, wPt, hPt, rasterInside };
+}
+
 function inspectLogo(file){
   return new Promise((resolve, reject) => {
     const fr = new FileReader();
     fr.onerror = () => reject(new Error('could not read the file'));
+
+    const isPdf = /pdf/i.test(file.type) || /\.pdf$/i.test(file.name);
+    const isEps = /postscript|eps/i.test(file.type) || /\.(?:eps|ai)$/i.test(file.name);
+    if (isPdf || isEps){
+      fr.onload = () => {
+        /* Read as latin1 text rather than decoded UTF-8: a PDF's streams are
+           binary and decoding them as text would corrupt the very bytes the
+           raster check looks for. */
+        const text = String(fr.result);
+        const head = isPdf ? '%PDF-' : '%!PS';
+        if (text.slice(0, 1024).indexOf(head) < 0)
+          return reject(new Error(isPdf ? 'that file is not a PDF' : 'that file is not an EPS'));
+
+        const r = inspectVectorDoc(text, isPdf ? 'pdf' : 'eps');
+        if (!r.ok) return reject(new Error(r.why));
+
+        const PT = 0.352778;
+        resolve({ vector:true, kind: isPdf ? 'pdf' : 'eps',
+                  wMm:+(r.wPt * PT).toFixed(2), hMm:+(r.hPt * PT).toFixed(2),
+                  /* A colour count needs the graphics state properly walked,
+                     which this does not do. Reporting null says "not measured"
+                     rather than inventing a number `gradeLogo` would then
+                     treat as measured. */
+                  colors:null, rasterInside:r.rasterInside, dataUrl:null });
+      };
+      fr.readAsBinaryString ? fr.readAsBinaryString(file) : fr.readAsText(file, 'latin1');
+      return;
+    }
+
     if (/svg/i.test(file.type) || /\.svg$/i.test(file.name)){
       fr.onload = () => {
         const text = String(fr.result);
