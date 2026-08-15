@@ -1,0 +1,13 @@
+# Published statically from the repo root, so keep non-public files out of it.
+# The functions still get assets/, lib/ and db/ through includeFiles.
+.git
+node_modules
+tests
+docs
+.playwright-mcp
+.netlify
+db
+WORKPLAN.md
+CARDWORKS-PRODUCT-BLUEPRINT.md
+cardworks-engine.test.cjs
+netlify.toml

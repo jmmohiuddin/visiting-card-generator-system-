@@ -8,3 +8,4 @@ node_modules/
 
 # Playwright MCP console dumps — debug output, not source
 .playwright-mcp/
+.vercel

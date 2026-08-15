@@ -57,7 +57,12 @@ a{color:inherit}
 
 export default async (req) => {
   const url = new URL(req.url);
-  const code = (url.pathname.split('/').filter(Boolean).pop() || '').toLowerCase();
+  /* Netlify routes /c/:code straight to this function, so the code is the
+     last path segment. Vercel's catch-all only matches one segment under
+     /api, so its rewrite passes the code as a query parameter instead. Read
+     whichever is present rather than assuming a host. */
+  const code = (url.searchParams.get('code')
+    || url.pathname.split('/').filter(Boolean).pop() || '').toLowerCase();
 
   if (!/^[0-9a-f]{6,16}$/.test(code)) {
     return new Response(page('Not found', '<h1>Not found</h1><p class="role">That link does not look like a card.</p>'),
